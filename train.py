@@ -147,15 +147,20 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
     """
     print("\n🚀 Starting model training...")
     
-    # Build model
-    model, base_model = build_liveness_model()
+    # Build and compile model within strategy scope for multi-GPU support
+    with STRATEGY.scope():
+        # Build model
+        model, base_model = build_liveness_model()
+        
+        # Compile model
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=0.001),
+            loss='binary_crossentropy',
+            metrics=['accuracy', keras.metrics.Precision(), keras.metrics.Recall()]
+        )
     
-    # Compile model
-    model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.001),
-        loss='binary_crossentropy',
-        metrics=['accuracy', keras.metrics.Precision(), keras.metrics.Recall()]
-    )
+    print(f"   🖥️  Using strategy: {STRATEGY.__class__.__name__}")
+    print(f"   🔢 Number of devices: {STRATEGY.num_replicas_in_sync}")
     
     # Enhanced data augmentation for better generalization
     print("\n🎨 Setting up data augmentation pipeline...")
@@ -202,7 +207,8 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         target_size=(544, 544),
         batch_size=BATCH_SIZE,
         class_mode='binary',
-        classes=['fake', 'real']\n    )
+        classes=['fake', 'real']
+    )
     
     # Custom callback to display validation metrics
     class ValidationMetricsCallback(keras.callbacks.Callback):
