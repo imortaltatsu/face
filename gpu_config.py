@@ -77,7 +77,7 @@ def configure_remote_gpu(remote_server_url):
 
 def configure_multi_gpu_strategy():
     """
-    Configure multi-GPU training strategy
+    Configure multi-GPU training strategy optimized for 8x A100
     
     Returns:
         tf.distribute.Strategy for multi-GPU training
@@ -86,9 +86,16 @@ def configure_multi_gpu_strategy():
     
     if len(gpus) > 1:
         print(f"\n🚀 Multi-GPU Training: {len(gpus)} GPUs")
-        strategy = tf.distribute.MirroredStrategy()
-        print(f"✅ MirroredStrategy enabled")
+        
+        # Use NCCL for fast multi-GPU communication on A100s
+        strategy = tf.distribute.MirroredStrategy(
+            cross_device_ops=tf.distribute.NcclAllReduce()
+        )
+        
+        print(f"✅ MirroredStrategy with NCCL enabled")
         print(f"   → Training will use all {len(gpus)} GPUs")
+        print(f"   → Effective batch size: {64 * len(gpus)} (64 per GPU)")
+        print(f"   → Using NCCL for fast GPU communication")
         return strategy
     elif len(gpus) == 1:
         print("\n💻 Single GPU Training")
