@@ -313,12 +313,13 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
     print("\n🔧 Phase 2: Fine-tuning entire model...")
     base_model.trainable = True
     
-    # Recompile with lower learning rate
-    model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.0001),
-        loss='binary_crossentropy',
-        metrics=['accuracy', keras.metrics.Precision(), keras.metrics.Recall()]
-    )
+    # Recompile with lower learning rate (within strategy scope)
+    with STRATEGY.scope():
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=0.00001),  # Even lower for fine-tuning
+            loss='binary_crossentropy',
+            metrics=['accuracy', keras.metrics.Precision(), keras.metrics.Recall()]
+        )
     
     history2 = model.fit(
         train_dataset,
