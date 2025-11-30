@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 from datetime import datetime
 
-# Hardcoded dataset links
+# Hardcoded dataset links (image-based only)
 DATASETS = {
     'nuaa': {
         'name': 'NUAA Photograph Imposter',
@@ -28,17 +28,18 @@ DATASETS = {
         'type': 'gdrive'
     },
     'celeba_spoof': {
-        'name': 'CelebA-Spoof (subset)',
-        'url': 'https://github.com/Davidzhangyuanhan/CelebA-Spoof/releases/download/v1.0/CelebA_Spoof.zip',
-        'description': 'High-quality spoofing dataset, 625K images',
+        'name': 'CelebA-Spoof',
+        'url': 'https://drive.google.com/drive/folders/1OW_1bawO79pRqdVEVmBzp8HSxdSwln_Z',
+        'description': 'High-quality spoofing dataset, 625K images (multiple zips)',
         'size': '~10GB',
-        'type': 'direct_url'
+        'type': 'manual',
+        'note': 'Google Drive folder - download all zips manually'
     },
-    'replay_attack': {
-        'name': 'Replay-Attack (sample)',
-        'url': 'https://www.idiap.ch/software/bob/data/bob/bob.db.replay/master/replay-attack-1.0.zip',
-        'description': 'Video replay attacks, ~1,200 videos',
-        'size': '~1.5GB',
+    'msu_mfsd': {
+        'name': 'MSU-MFSD',
+        'url': 'https://www.cse.msu.edu/rgroups/biometrics/Publications/Databases/MSUMobileFaceSpoofing/MSU_MFSD.zip',
+        'description': 'Mobile face spoofing, print & replay attacks',
+        'size': '~2GB',
         'type': 'direct_url'
     }
 }
@@ -83,8 +84,8 @@ class DatasetManager:
         
         print("\n📥 Download & Organize:")
         print("  1. Download NUAA dataset (recommended - 12K images)")
-        print("  2. Download CelebA-Spoof dataset (625K images)")
-        print("  3. Download Replay-Attack dataset (1.2K videos)")
+        print("  2. Show CelebA-Spoof info (manual download - 625K images)")
+        print("  3. Download MSU-MFSD dataset (2GB)")
         print("  4. Download ALL available datasets")
         print("  5. Download from custom Google Drive link")
         
@@ -516,28 +517,32 @@ def main():
                 manager.print_summary()
         
         elif choice == '2':
-            # Download CelebA-Spoof
-            extract_dir = manager.download_from_url(
-                DATASETS['celeba_spoof']['url'],
-                'celeba_spoof'
-            )
-            if extract_dir:
-                manager.organize_dataset(extract_dir, 'CelebA-Spoof')
-                manager.print_summary()
+            # Show CelebA-Spoof info
+            info = DATASETS['celeba_spoof']
+            print(f"\n📦 {info['name']}")
+            print(f"   Description: {info['description']}")
+            print(f"   Size: {info['size']}")
+            print(f"   ⚠️  {info['note']}")
+            print(f"\n   Download from: {info['url']}")
+            print("   After downloading, use option 6 to organize")
         
         elif choice == '3':
-            # Download Replay-Attack
+            # Download MSU-MFSD
             extract_dir = manager.download_from_url(
-                DATASETS['replay_attack']['url'],
-                'replay_attack'
+                DATASETS['msu_mfsd']['url'],
+                'msu_mfsd'
             )
             if extract_dir:
-                manager.organize_dataset(extract_dir, 'Replay-Attack')
+                manager.organize_dataset(extract_dir, 'MSU-MFSD')
                 manager.print_summary()
         
         elif choice == '4':
             # Download all
             for key, info in DATASETS.items():
+                if info.get('type') == 'manual':
+                    print(f"\n⏭️  Skipping {info['name']} (requires manual download)")
+                    continue
+                
                 print(f"\n{'='*60}")
                 print(f"Downloading {info['name']}")
                 print(f"{'='*60}")
