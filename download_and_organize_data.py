@@ -24,13 +24,22 @@ DATASETS = {
         'name': 'NUAA Photograph Imposter',
         'gdrive_id': '1-aSGKdAIK0YoKxQvnNx1KJvTm4zbwZLz',
         'description': 'Real faces vs printed photos, ~12K images',
-        'size': '~400MB'
+        'size': '~400MB',
+        'type': 'gdrive'
     },
-    'casia_surf': {
-        'name': 'CASIA-SURF',
-        'gdrive_id': 'REPLACE_WITH_ACTUAL_ID',  # Add if available
-        'description': 'RGB + Depth + IR, ~21K images',
-        'size': '~2GB'
+    'celeba_spoof': {
+        'name': 'CelebA-Spoof (subset)',
+        'url': 'https://github.com/Davidzhangyuanhan/CelebA-Spoof/releases/download/v1.0/CelebA_Spoof.zip',
+        'description': 'High-quality spoofing dataset, 625K images',
+        'size': '~10GB',
+        'type': 'direct_url'
+    },
+    'replay_attack': {
+        'name': 'Replay-Attack (sample)',
+        'url': 'https://www.idiap.ch/software/bob/data/bob/bob.db.replay/master/replay-attack-1.0.zip',
+        'description': 'Video replay attacks, ~1,200 videos',
+        'size': '~1.5GB',
+        'type': 'direct_url'
     }
 }
 
@@ -74,31 +83,27 @@ class DatasetManager:
         
         print("\n📥 Download & Organize:")
         print("  1. Download NUAA dataset (recommended - 12K images)")
-        print("  2. Download CASIA-SURF dataset (21K images)")
-        print("  3. Download ALL available datasets")
-        print("  4. Download from custom Google Drive link")
+        print("  2. Download CelebA-Spoof dataset (625K images)")
+        print("  3. Download Replay-Attack dataset (1.2K videos)")
+        print("  4. Download ALL available datasets")
+        print("  5. Download from custom Google Drive link")
         
         print("\n📂 Organize Existing:")
-        print("  5. Organize manually downloaded dataset")
+        print("  6. Organize manually downloaded dataset")
         
         print("\n🎥 Collect Your Own:")
-        print("  6. Collect real faces via webcam")
-        print("  7. Collect fake faces (photos) via webcam")
+        print("  7. Collect real faces via webcam")
+        print("  8. Collect fake faces (photos) via webcam")
         
         print("\n📊 Info:")
-        print("  8. Show dataset summary")
-        print("  9. Exit")
+        print("  9. Show dataset summary")
+        print("  10. Exit")
         
         print("\n" + "=" * 60)
     
     def download_from_gdrive(self, file_id_or_url, output_name='dataset'):
-        """Download dataset from Google Drive"""
-        try:
-            import gdown
-        except ImportError:
-            print("❌ gdown not installed")
-            print("Install with: uv add gdown")
-            return None
+        """Download dataset from Google Drive using curl (more reliable than gdown)"""
+        import subprocess
         
         # Extract file ID from URL if needed
         if 'drive.google.com' in file_id_or_url:
@@ -117,8 +122,107 @@ class DatasetManager:
         output_file = self.raw_dir / f'{output_name}.zip'
         
         try:
-            url = f'https://drive.google.com/uc?id={file_id}'
-            gdown.download(url, str(output_file), quiet=False)
+            # Use curl with Google Drive's direct download URL (handles large files)
+            url = f'https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t'
+            
+            print(f"   Using curl for reliable download...")
+            
+            # Run curl command
+            result = subprocess.run(
+                ['curl', '-L', url, '-o', str(output_file)],
+                capture_output=True,
+                text=True
+            )
+            
+            # If SSL error, retry with --insecure
+            if result.returncode != 0 and 'SSL certificate' in result.stderr:
+                print(f"   ⚠️  SSL error detected, retrying with --insecure flag...")
+                result = subprocess.run(
+                    ['curl', '-k', '-L', url, '-o', str(output_file)],
+                    capture_output=True,
+                    text=True
+                )
+            
+            if result.returncode != 0:
+                raise Exception(f"curl failed: {result.stderr}")
+            
+            # Check if file was downloaded
+            if not output_file.exists() or output_file.stat().st_size < 1000:
+                raise Exception("Downloaded file is too small or doesn't exist")
+            
+            print(f"✅ Downloaded to: {output_file}")
+            print(f"   Size: {output_file.stat().st_size / (1024*1024):.1f} MB")
+            
+            # Extract
+            print(f"\n📦 Extracting...")
+            extract_dir = self.raw_dir / output_name
+            extract_dir.mkdir(exist_ok=True)
+            
+            with zipfile.ZipFile(output_file, 'r') as zip_ref:
+                for member in tqdm(zip_ref.filelist, desc='Extracting'):
+                    zip_ref.extract(member, extract_dir)
+            
+            print(f"✅ Extracted to: {extract_dir}")
+            return extract_dir
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ Download failed: {e}")
+            print(f"\n🔗 Attempted URL: https://drive.google.com/uc?id={file_id}")
+            print(f"📋 File ID: {file_id}")
+            
+            # Check for SSL errors
+            if 'SSL' in error_msg or 'CERTIFICATE' in error_msg:
+                print("\n⚠️  SSL Certificate Error Detected!")
+                print("\n💡 SSL Troubleshooting:")
+                print("   1. Install/update certificates:")
+                print("      macOS: /Applications/Python*/Install\\ Certificates.command")
+                print("      or: pip install --upgrade certifi")
+                print("   2. Try with SSL verification disabled (not recommended):")
+                print("      Set environment variable: PYTHONHTTPSVERIFY=0")
+                print("   3. Download manually from:")
+                print(f"      https://drive.google.com/file/d/{file_id}/view")
+            else:
+                print("\n💡 Troubleshooting:")
+                print("   1. Check if the file is publicly accessible")
+                print("   2. Try downloading manually from:")
+                print(f"      https://drive.google.com/file/d/{file_id}/view")
+                print("   3. If manual download works, use option 6 to organize")
+            
+            return None
+    
+    def download_from_url(self, url, output_name='dataset'):
+        """Download dataset from direct URL"""
+        import requests
+        
+        print(f"\n📥 Downloading from {url}...")
+        
+        output_file = self.raw_dir / f'{output_name}.zip'
+        
+        try:
+            # Try with SSL verification first
+            try:
+                response = requests.get(url, stream=True, timeout=30, verify=True)
+                response.raise_for_status()
+            except requests.exceptions.SSLError:
+                print("   ⚠️  SSL error detected, retrying without verification...")
+                response = requests.get(url, stream=True, timeout=30, verify=False)
+                response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            
+            with open(output_file, 'wb') as f:
+                if total_size > 0:
+                    with tqdm(total=total_size, unit='B', unit_scale=True, desc='Downloading') as pbar:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                pbar.update(len(chunk))
+                else:
+                    # No content-length header, download without progress
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
             
             print(f"✅ Downloaded to: {output_file}")
             
@@ -135,8 +239,31 @@ class DatasetManager:
             return extract_dir
             
         except Exception as e:
+            error_msg = str(e)
             print(f"❌ Download failed: {e}")
+            print(f"\n🔗 Attempted URL: {url}")
+            
+            # Check for SSL errors
+            if 'SSL' in error_msg or 'CERTIFICATE' in error_msg:
+                print("\n⚠️  SSL Certificate Error Detected!")
+                print("\n💡 SSL Troubleshooting:")
+                print("   1. Install/update certificates:")
+                print("      macOS: /Applications/Python*/Install\\ Certificates.command")
+                print("      or: pip install --upgrade certifi")
+                print("   2. Update requests library:")
+                print("      uv add --upgrade requests")
+                print("   3. Try downloading with curl:")
+                print(f"      curl -L '{url}' -o dataset.zip")
+            else:
+                print("\n💡 Troubleshooting:")
+                print("   1. Check your internet connection")
+                print("   2. Verify the URL is still valid:")
+                print(f"      {url}")
+                print("   3. Try downloading manually and use option 6 to organize")
+                print("   4. The dataset might have moved - check for updated links")
+            
             return None
+
     
     def organize_dataset(self, dataset_dir, dataset_name, train_split=0.8):
         """
@@ -373,7 +500,7 @@ def main():
     
     while True:
         manager.show_menu()
-        choice = input("\nEnter choice (1-9): ").strip()
+        choice = input("\nEnter choice (1-10): ").strip()
         
         if choice == '1':
             # Download NUAA
@@ -382,7 +509,6 @@ def main():
                 'nuaa'
             )
             if extract_dir:
-                # Look for 'raw' subdirectory (NUAA structure)
                 raw_subdir = extract_dir / 'raw'
                 if raw_subdir.exists():
                     extract_dir = raw_subdir
@@ -390,32 +516,42 @@ def main():
                 manager.print_summary()
         
         elif choice == '2':
-            # Download CASIA-SURF
-            if DATASETS['casia_surf']['gdrive_id'] == 'REPLACE_WITH_ACTUAL_ID':
-                print("\n⚠️  CASIA-SURF link not available")
-                print("Please provide a Google Drive link (option 4)")
-            else:
-                extract_dir = manager.download_from_gdrive(
-                    DATASETS['casia_surf']['gdrive_id'],
-                    'casia_surf'
-                )
-                if extract_dir:
-                    manager.organize_dataset(extract_dir, 'CASIA-SURF')
-                    manager.print_summary()
+            # Download CelebA-Spoof
+            extract_dir = manager.download_from_url(
+                DATASETS['celeba_spoof']['url'],
+                'celeba_spoof'
+            )
+            if extract_dir:
+                manager.organize_dataset(extract_dir, 'CelebA-Spoof')
+                manager.print_summary()
         
         elif choice == '3':
-            # Download all
-            for key, info in DATASETS.items():
-                if info['gdrive_id'] != 'REPLACE_WITH_ACTUAL_ID':
-                    print(f"\n{'='*60}")
-                    print(f"Downloading {info['name']}")
-                    print(f"{'='*60}")
-                    extract_dir = manager.download_from_gdrive(info['gdrive_id'], key)
-                    if extract_dir:
-                        manager.organize_dataset(extract_dir, info['name'])
-            manager.print_summary()
+            # Download Replay-Attack
+            extract_dir = manager.download_from_url(
+                DATASETS['replay_attack']['url'],
+                'replay_attack'
+            )
+            if extract_dir:
+                manager.organize_dataset(extract_dir, 'Replay-Attack')
+                manager.print_summary()
         
         elif choice == '4':
+            # Download all
+            for key, info in DATASETS.items():
+                print(f"\n{'='*60}")
+                print(f"Downloading {info['name']}")
+                print(f"{'='*60}")
+                
+                if info.get('type') == 'gdrive':
+                    extract_dir = manager.download_from_gdrive(info['gdrive_id'], key)
+                else:
+                    extract_dir = manager.download_from_url(info['url'], key)
+                
+                if extract_dir:
+                    manager.organize_dataset(extract_dir, info['name'])
+            manager.print_summary()
+        
+        elif choice == '5':
             # Custom Google Drive link
             print("\n📥 Custom Google Drive Download")
             gdrive_input = input("Paste Google Drive URL or file ID: ").strip()
@@ -427,7 +563,7 @@ def main():
                     manager.organize_dataset(extract_dir, dataset_name)
                     manager.print_summary()
         
-        elif choice == '5':
+        elif choice == '6':
             # Organize manual download
             print("\n📁 Organize Manually Downloaded Dataset")
             dataset_path = input("Enter path to dataset: ").strip()
@@ -439,23 +575,23 @@ def main():
             else:
                 print(f"❌ Path not found: {dataset_path}")
         
-        elif choice == '6':
+        elif choice == '7':
             # Collect real faces
             num_samples = int(input("\nHow many real face samples? (default: 100): ") or "100")
             manager.collect_webcam_data('real', num_samples)
             manager.print_summary()
         
-        elif choice == '7':
+        elif choice == '8':
             # Collect fake faces
             num_samples = int(input("\nHow many fake face samples? (default: 100): ") or "100")
             manager.collect_webcam_data('fake', num_samples)
             manager.print_summary()
         
-        elif choice == '8':
+        elif choice == '9':
             # Show summary
             manager.print_summary()
         
-        elif choice == '9':
+        elif choice == '10':
             print("\n👋 Exiting...")
             break
         
