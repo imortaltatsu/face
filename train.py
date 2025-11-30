@@ -212,14 +212,18 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         preprocessing_function=keras.applications.mobilenet_v2.preprocess_input
     )
     
-    # Load data with dynamic batch size
+    # Load data with optimized pipeline settings
     print(f"\n📦 Using batch size: {BATCH_SIZE}")
+    print("⚡ Optimizing data pipeline...")
+    
     train_generator = train_datagen.flow_from_directory(
         train_dir,
         target_size=(544, 544),
         batch_size=BATCH_SIZE,
         class_mode='binary',
-        classes=['fake', 'real']  # 0=fake, 1=real
+        classes=['fake', 'real'],  # 0=fake, 1=real
+        shuffle=True,
+        seed=42
     )
     
     val_generator = val_datagen.flow_from_directory(
@@ -227,8 +231,14 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         target_size=(544, 544),
         batch_size=BATCH_SIZE,
         class_mode='binary',
-        classes=['fake', 'real']
+        classes=['fake', 'real'],
+        shuffle=False  # Don't shuffle validation
     )
+    
+    print(f"   ✅ Training samples: {train_generator.samples}")
+    print(f"   ✅ Validation samples: {val_generator.samples}")
+    print(f"   ✅ Steps per epoch: {len(train_generator)}")
+    print(f"   ✅ Validation steps: {len(val_generator)}")
     
     # Custom callback to display validation metrics
     class ValidationMetricsCallback(keras.callbacks.Callback):
@@ -291,7 +301,10 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         train_generator,
         epochs=epochs,
         validation_data=val_generator,
-        callbacks=callbacks
+        callbacks=callbacks,
+        workers=8,  # Parallel data loading
+        use_multiprocessing=True,  # Use multiple processes
+        max_queue_size=32  # Larger prefetch queue
     )
     
     # Phase 2: Fine-tune the entire model
@@ -309,7 +322,10 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         train_generator,
         epochs=fine_tune_epochs,
         validation_data=val_generator,
-        callbacks=callbacks
+        callbacks=callbacks,
+        workers=8,  # Parallel data loading
+        use_multiprocessing=True,  # Use multiple processes
+        max_queue_size=32  # Larger prefetch queue
     )
     
     # Save final model
