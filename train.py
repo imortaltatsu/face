@@ -301,10 +301,7 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         train_generator,
         epochs=epochs,
         validation_data=val_generator,
-        callbacks=callbacks,
-        workers=8,  # Parallel data loading
-        use_multiprocessing=True,  # Use multiple processes
-        max_queue_size=32  # Larger prefetch queue
+        callbacks=callbacks
     )
     
     # Phase 2: Fine-tune the entire model
@@ -322,10 +319,7 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         train_generator,
         epochs=fine_tune_epochs,
         validation_data=val_generator,
-        callbacks=callbacks,
-        workers=8,  # Parallel data loading
-        use_multiprocessing=True,  # Use multiple processes
-        max_queue_size=32  # Larger prefetch queue
+        callbacks=callbacks
     )
     
     # Save final model
