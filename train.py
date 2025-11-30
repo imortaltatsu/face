@@ -309,10 +309,36 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         callbacks=callbacks
     )
     
-    # Phase 2: Fine-tuning disabled (Phase 1 already achieves 99.96% accuracy)
-    print("\n✅ Phase 1 training complete with excellent accuracy!")
-    print("   Skipping Phase 2 to prevent potential overfitting/collapse")
-    history2 = None
+    # Phase 2: Fine-tune the entire model with extreme caution
+    print("\n🔧 Phase 2: Fine-tuning entire model...")
+    print("   Using ultra-low learning rate to prevent collapse")
+    
+    # Unfreeze only the last few layers, not all
+    base_model.trainable = True
+    for layer in base_model.layers[:-30]:  # Freeze all but last 30 layers
+        layer.trainable = False
+    
+    print(f"   Trainable layers: {sum([1 for l in base_model.layers if l.trainable])}/{len(base_model.layers)}")
+    
+    # Recompile with ultra-low learning rate and strong gradient clipping
+    with STRATEGY.scope():
+        optimizer = keras.optimizers.Adam(
+            learning_rate=0.000001,  # 1e-6: 100x lower than Phase 1
+            clipnorm=0.5  # Strong gradient clipping
+        )
+        
+        model.compile(
+            optimizer=optimizer,
+            loss='binary_crossentropy',
+            metrics=['accuracy', keras.metrics.Precision(), keras.metrics.Recall()]
+        )
+    
+    history2 = model.fit(
+        train_dataset,
+        epochs=fine_tune_epochs,
+        validation_data=val_dataset,
+        callbacks=callbacks
+    )
     
     # Save final model
     os.makedirs('models', exist_ok=True)
