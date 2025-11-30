@@ -37,10 +37,10 @@ if GPU_CONFIG_AVAILABLE:
     print("\n🖥️  Configuring GPU for training...")
     configure_gpu(use_mixed_precision=True, memory_growth=True)
     STRATEGY = configure_multi_gpu_strategy()
-    BATCH_SIZE = get_optimal_batch_size(544)
+    BATCH_SIZE = get_optimal_batch_size(544, gpu_memory_gb=40)  # A100 40GB
 else:
     STRATEGY = tf.distribute.get_strategy()
-    BATCH_SIZE = 8
+    BATCH_SIZE = 64  # Default for unknown GPU
 
 
 class LivenessDataGenerator:
