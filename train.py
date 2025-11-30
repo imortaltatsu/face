@@ -182,63 +182,68 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
     print(f"   🔢 Number of devices: {STRATEGY.num_replicas_in_sync}")
     print(f"   📦 Batch size: {BATCH_SIZE}")
     
-    # Enhanced data augmentation for better generalization
-    print("\n🎨 Setting up data augmentation pipeline...")
-    train_datagen = keras.preprocessing.image.ImageDataGenerator(
-        preprocessing_function=keras.applications.mobilenet_v2.preprocess_input,
-        # Geometric transformations
-        rotation_range=30,           # Rotate up to 30 degrees
-        width_shift_range=0.2,       # Horizontal shift
-        height_shift_range=0.2,      # Vertical shift
-        shear_range=0.15,            # Shear transformation
-        zoom_range=0.2,              # Zoom in/out
-        horizontal_flip=True,        # Mirror images
-        # Color/brightness adjustments
-        brightness_range=[0.7, 1.3], # Brightness variation
-        channel_shift_range=20.0,    # Color channel shifts
-        # Fill mode for transformed images
-        fill_mode='nearest'
-    )
-    
-    print("   ✅ Augmentation enabled:")
-    print("      - Rotation: ±30°")
-    print("      - Shifts: ±20%")
-    print("      - Zoom: ±20%")
-    print("      - Brightness: 70-130%")
-    print("      - Horizontal flip")
-    print("      - Shear & channel shifts")
-    
-    val_datagen = keras.preprocessing.image.ImageDataGenerator(
-        preprocessing_function=keras.applications.mobilenet_v2.preprocess_input
-    )
-    
-    # Load data with optimized pipeline settings
+    # Load data with optimized tf.data pipeline (much faster than ImageDataGenerator)
     print(f"\n📦 Using batch size: {BATCH_SIZE}")
-    print("⚡ Optimizing data pipeline...")
+    print("⚡ Building optimized tf.data pipeline...")
     
-    train_generator = train_datagen.flow_from_directory(
-        train_dir,
-        target_size=(544, 544),
-        batch_size=BATCH_SIZE,
-        class_mode='binary',
-        classes=['fake', 'real'],  # 0=fake, 1=real
-        shuffle=True,
-        seed=42
-    )
+    # Get file paths
+    train_dir_path = Path(train_dir)
+    val_dir_path = Path(val_dir)
     
-    val_generator = val_datagen.flow_from_directory(
-        val_dir,
-        target_size=(544, 544),
-        batch_size=BATCH_SIZE,
-        class_mode='binary',
-        classes=['fake', 'real'],
-        shuffle=False  # Don't shuffle validation
-    )
+    train_fake = list((train_dir_path / 'fake').glob('*.jpg'))
+    train_real = list((train_dir_path / 'real').glob('*.jpg'))
+    val_fake = list((val_dir_path / 'fake').glob('*.jpg'))
+    val_real = list((val_dir_path / 'real').glob('*.jpg'))
     
-    print(f"   ✅ Training samples: {train_generator.samples}")
-    print(f"   ✅ Validation samples: {val_generator.samples}")
-    print(f"   ✅ Steps per epoch: {len(train_generator)}")
-    print(f"   ✅ Validation steps: {len(val_generator)}")
+    # Create datasets
+    train_files = [str(f) for f in train_fake + train_real]
+    train_labels = [0] * len(train_fake) + [1] * len(train_real)
+    val_files = [str(f) for f in val_fake + val_real]
+    val_labels = [0] * len(val_fake) + [1] * len(val_real)
+    
+    def load_and_preprocess(path, label):
+        # Load image
+        img = tf.io.read_file(path)
+        img = tf.image.decode_jpeg(img, channels=3)
+        img = tf.image.resize(img, [544, 544])
+        
+        # Data augmentation for training
+        if tf.random.uniform([]) > 0.5:
+            img = tf.image.flip_left_right(img)
+        img = tf.image.random_brightness(img, 0.3)
+        img = tf.image.random_contrast(img, 0.7, 1.3)
+        
+        # Preprocess for MobileNetV2
+        img = keras.applications.mobilenet_v2.preprocess_input(img)
+        return img, label
+    
+    def load_and_preprocess_val(path, label):
+        # Load image (no augmentation for validation)
+        img = tf.io.read_file(path)
+        img = tf.image.decode_jpeg(img, channels=3)
+        img = tf.image.resize(img, [544, 544])
+        img = keras.applications.mobilenet_v2.preprocess_input(img)
+        return img, label
+    
+    # Build optimized pipelines
+    AUTOTUNE = tf.data.AUTOTUNE
+    
+    train_dataset = tf.data.Dataset.from_tensor_slices((train_files, train_labels))
+    train_dataset = train_dataset.shuffle(len(train_files), reshuffle_each_iteration=True)
+    train_dataset = train_dataset.map(load_and_preprocess, num_parallel_calls=AUTOTUNE)
+    train_dataset = train_dataset.batch(BATCH_SIZE)
+    train_dataset = train_dataset.prefetch(AUTOTUNE)
+    
+    val_dataset = tf.data.Dataset.from_tensor_slices((val_files, val_labels))
+    val_dataset = val_dataset.map(load_and_preprocess_val, num_parallel_calls=AUTOTUNE)
+    val_dataset = val_dataset.batch(BATCH_SIZE)
+    val_dataset = val_dataset.prefetch(AUTOTUNE)
+    
+    print(f"   ✅ Training samples: {len(train_files)}")
+    print(f"   ✅ Validation samples: {len(val_files)}")
+    print(f"   ✅ Steps per epoch: {len(train_files) // BATCH_SIZE}")
+    print(f"   ✅ Validation steps: {len(val_files) // BATCH_SIZE}")
+    print(f"   ✅ Using tf.data with AUTOTUNE prefetching")
     
     # Custom callback to display validation metrics
     class ValidationMetricsCallback(keras.callbacks.Callback):
@@ -298,9 +303,9 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
     # Phase 1: Train only the classification head
     print("\n📚 Phase 1: Training classification head...")
     history1 = model.fit(
-        train_generator,
+        train_dataset,
         epochs=epochs,
-        validation_data=val_generator,
+        validation_data=val_dataset,
         callbacks=callbacks
     )
     
@@ -316,9 +321,9 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
     )
     
     history2 = model.fit(
-        train_generator,
+        train_dataset,
         epochs=fine_tune_epochs,
-        validation_data=val_generator,
+        validation_data=val_dataset,
         callbacks=callbacks
     )
     
@@ -332,7 +337,7 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
     print("📊 Final Model Evaluation")
     print("=" * 60)
     
-    results = model.evaluate(val_generator, verbose=0)
+    results = model.evaluate(val_dataset, verbose=0)
     loss, accuracy, precision, recall = results
     
     # Calculate F1-score
