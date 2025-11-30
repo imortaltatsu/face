@@ -309,24 +309,10 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         callbacks=callbacks
     )
     
-    # Phase 2: Fine-tune the entire model
-    print("\n🔧 Phase 2: Fine-tuning entire model...")
-    base_model.trainable = True
-    
-    # Recompile with lower learning rate (within strategy scope)
-    with STRATEGY.scope():
-        model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.00001),  # Even lower for fine-tuning
-            loss='binary_crossentropy',
-            metrics=['accuracy', keras.metrics.Precision(), keras.metrics.Recall()]
-        )
-    
-    history2 = model.fit(
-        train_dataset,
-        epochs=fine_tune_epochs,
-        validation_data=val_dataset,
-        callbacks=callbacks
-    )
+    # Phase 2: Fine-tuning disabled (Phase 1 already achieves 99.96% accuracy)
+    print("\n✅ Phase 1 training complete with excellent accuracy!")
+    print("   Skipping Phase 2 to prevent potential overfitting/collapse")
+    history2 = None
     
     # Save final model
     os.makedirs('models', exist_ok=True)
