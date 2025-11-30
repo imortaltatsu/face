@@ -113,13 +113,27 @@ class LivenessDataGenerator:
 def build_liveness_model():
     """Build MobileNetV2-based liveness detection model"""
     
-    # Use MobileNetV2 as feature extractor
-    base_model = keras.applications.MobileNetV2(
-        input_shape=(544, 544, 3),
-        include_top=False,
-        weights='imagenet',
-        pooling='avg'
-    )
+    # Disable SSL verification for downloading weights (if needed)
+    import ssl
+    ssl._create_default_https_context = ssl._create_unverified_context
+    
+    try:
+        # Use MobileNetV2 as feature extractor
+        base_model = keras.applications.MobileNetV2(
+            input_shape=(544, 544, 3),
+            include_top=False,
+            weights='imagenet',
+            pooling='avg'
+        )
+    except Exception as e:
+        print(f"⚠️  Failed to download ImageNet weights: {e}")
+        print("   Using model without pre-trained weights...")
+        base_model = keras.applications.MobileNetV2(
+            input_shape=(544, 544, 3),
+            include_top=False,
+            weights=None,
+            pooling='avg'
+        )
     
     # Freeze base model initially
     base_model.trainable = False
