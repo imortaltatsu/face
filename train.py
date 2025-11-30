@@ -166,15 +166,21 @@ def train_liveness_model(train_dir, val_dir, epochs=10, fine_tune_epochs=5):
         # Build model
         model, base_model = build_liveness_model()
         
-        # Compile model
+        # Compile model with gradient clipping to prevent NaN
+        optimizer = keras.optimizers.Adam(
+            learning_rate=0.0001,  # Reduced from 0.001 for stability
+            clipnorm=1.0  # Clip gradients to prevent NaN
+        )
+        
         model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=0.001),
+            optimizer=optimizer,
             loss='binary_crossentropy',
             metrics=['accuracy', keras.metrics.Precision(), keras.metrics.Recall()]
         )
     
     print(f"   🖥️  Using strategy: {STRATEGY.__class__.__name__}")
     print(f"   🔢 Number of devices: {STRATEGY.num_replicas_in_sync}")
+    print(f"   📦 Batch size: {BATCH_SIZE}")
     
     # Enhanced data augmentation for better generalization
     print("\n🎨 Setting up data augmentation pipeline...")

@@ -111,19 +111,19 @@ def get_optimal_batch_size(image_size, gpu_memory_gb=8):
     """
     # Rough estimation based on image size and GPU memory
     if image_size <= 224:
-        base_batch = 32
+        base_batch = 64
     elif image_size <= 384:
-        base_batch = 16
+        base_batch = 32
     elif image_size <= 544:
-        base_batch = 8
+        base_batch = 16  # Increased from 8
     else:
-        base_batch = 4
+        base_batch = 8
     
-    # Scale by GPU memory
+    # Scale by GPU memory (40GB A100 GPUs)
     memory_factor = gpu_memory_gb / 8  # Assume 8GB as baseline
     optimal_batch = int(base_batch * memory_factor)
     
-    return max(1, optimal_batch)
+    return max(4, optimal_batch)  # Minimum batch size of 4
 
 
 # Example usage configurations
