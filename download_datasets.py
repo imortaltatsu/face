@@ -1,7 +1,7 @@
 """
 Automated Anti-Spoofing Dataset Scraper
 
-1. Scrapes dataset websites for direct download links.
+1. Scrapes CelebA-Spoof dataset for direct download links.
 2. Uses curl with SSL bypass (-k) to download files.
 3. Handles Google Drive links using curl with confirm token logic.
 4. Automatically unzips downloaded archives.
@@ -127,15 +127,20 @@ class DatasetScraper:
         """Scrape CelebA-Spoof dataset"""
         print("\n📥 Scraping CelebA-Spoof...")
         
-        repo_url = "https://github.com/Davidzhangyuanhan/CelebA-Spoof"
+        # Updated URL as requested
+        repo_url = "https://github.com/ZhangYuanhan-AI/CelebA-Spoof"
         
         # Try GitHub releases
         links = self.scrape_github_releases(repo_url)
         
         # Try scraping README for Google Drive links
-        readme_url = f"{repo_url}/blob/master/README.md"
+        readme_url = f"{repo_url}/blob/main/README.md" # 'main' branch is common, fallback to master if needed
         gdrive_links = self.scrape_google_drive_links(readme_url)
         
+        if not gdrive_links:
+             readme_url = f"{repo_url}/blob/master/README.md"
+             gdrive_links = self.scrape_google_drive_links(readme_url)
+
         all_links = links + gdrive_links
         
         if all_links:
@@ -152,37 +157,14 @@ class DatasetScraper:
         else:
             print("No direct download links found")
             return False
-    
-    def scrape_oulu_npu(self):
-        """Scrape OULU-NPU dataset"""
-        print("\n📥 Scraping OULU-NPU...")
-        
-        page_url = "https://sites.google.com/site/oulunpudatabase/"
-        gdrive_links = self.scrape_google_drive_links(page_url)
-        
-        if gdrive_links:
-            print(f"Found {len(gdrive_links)} Google Drive links")
-            output_dir = self.output_dir / 'oulu_npu'
-            output_dir.mkdir(exist_ok=True)
-            
-            for i, link in enumerate(gdrive_links):
-                filename = f"oulu_npu_part{i+1}.zip"
-                output_path = output_dir / filename
-                if self.download_with_curl(link, output_path):
-                    self.unzip_file(output_path)
-            return True
-        else:
-            print("No links found")
-            return False
 
     def run(self):
         """Main execution flow"""
         print("\n" + "="*70)
-        print("🕷️  AUTOMATED DATASET SCRAPER (CURL + SSL BYPASS + UNZIP)")
+        print("🕷️  AUTOMATED DATASET SCRAPER (CelebA-Spoof ONLY)")
         print("="*70)
         
         self.scrape_celeba_spoof()
-        self.scrape_oulu_npu()
         
         print("\n" + "="*70)
         print("✅ SCRAPING COMPLETE")
