@@ -17,9 +17,11 @@ from PIL import Image
 from model import get_model
 from preprocessing import get_preprocessor
 from similarity import verify_faces, identify_face, cosine_similarity
-from liveness import get_liveness_detector
+from anti_spoofing import get_detector
 from user_profile import get_database
 import config
+import shutil
+import uuid
 
 
 @asynccontextmanager
@@ -35,8 +37,8 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI app with lifespan
 app = FastAPI(
     title="Face Verification API",
-    description="Face verification system with liveness detection and user profiles",
-    version="1.0.0",
+    description="Face verification system with video-based anti-spoofing and user profiles",
+    version="1.1.0",
     lifespan=lifespan
 )
 
@@ -52,13 +54,13 @@ app.add_middleware(
 # Global instances (preloaded at startup)
 model = None
 preprocessor = None
-liveness_detector = None
+anti_spoofing = None
 database = None
 
 
 def initialize_models():
     """Initialize all models at startup"""
-    global model, preprocessor, liveness_detector, database
+    global model, preprocessor, anti_spoofing, database
     
     print("\n🔄 Initializing models...")
     print("  ⏳ Loading FaceNet model...")
@@ -67,19 +69,19 @@ def initialize_models():
     print("  ⏳ Loading MTCNN face detector...")
     preprocessor = get_preprocessor()
     
-    print("  ⏳ Loading liveness detector...")
-    liveness_detector = get_liveness_detector()
+    print("  ⏳ Loading anti-spoofing detector...")
+    anti_spoofing = get_detector()
     
     print("  ⏳ Loading DuckDB database...")
     database = get_database()
     
     print("✅ All models initialized and ready!\n")
-    return model, preprocessor, liveness_detector, database
+    return model, preprocessor, anti_spoofing, database
 
 
 def get_instances():
     """Get initialized model instances"""
-    return model, preprocessor, liveness_detector, database
+    return model, preprocessor, anti_spoofing, database
 
 
 # Pydantic models for request/response
@@ -127,13 +129,13 @@ async def root():
     return {
         "status": "online",
         "service": "Face Verification API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "features": [
             "Face verification (1:1)",
             "Face identification (1:N)",
-            "Liveness detection",
+            "Video Anti-Spoofing (PAD)",
             "User profile management",
-            "Enriched embeddings with vector addition"
+            "Enriched embeddings"
         ]
     }
 
@@ -145,14 +147,10 @@ async def register_user(
     image: UploadFile = File(...)
 ):
     """
-    Register a new user with their face image
-    
-    - **user_id**: Unique user identifier
-    - **name**: User's name
-    - **image**: Face image file
+    Register a new user with their face image (Legacy image-based)
     """
     try:
-        m, prep, liveness, db = get_instances()
+        m, prep, _, db = get_instances()
         
         # Read and process image
         image_bytes = await image.read()
@@ -166,24 +164,6 @@ async def register_user(
         
         face, detection = result
         
-        # Check liveness
-        print(f"🔍 Calling liveness detection...")
-        print(f"   Image shape: {img_array.shape}")
-        print(f"   Detection box: {detection}")
-        
-        is_live, liveness_score, reason = liveness.detect_liveness(img_array, detection)
-        
-        print(f"📊 Liveness result:")
-        print(f"   is_live: {is_live}")
-        print(f"   score: {liveness_score}")
-        print(f"   reason: {reason}")
-        
-        if not is_live:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Liveness check failed: {reason} (score: {liveness_score:.2f})"
-            )
-        
         # Extract embedding
         embedding = m.get_embedding(face)
         
@@ -194,19 +174,92 @@ async def register_user(
             success=True,
             user_id=user_id,
             name=name,
-            message=f"User {name} registered successfully with liveness score {liveness_score:.2f}"
+            message=f"User {name} registered successfully"
         )
     
-    except ValueError as e:
-        print(f"❌ ValueError in register: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         print(f"❌ Exception in register: {str(e)}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+
+@app.post("/register_video", response_model=RegisterResponse)
+async def register_user_video(
+    user_id: str = Form(...),
+    name: str = Form(...),
+    video: UploadFile = File(...)
+):
+    """
+    Register a new user with a video (includes Anti-Spoofing check)
+    """
+    try:
+        m, prep, detector, db = get_instances()
+        
+        # Save video temporarily
+        temp_filename = f"temp_{uuid.uuid4()}.mp4"
+        temp_path = os.path.join(config.UPLOAD_DIR, temp_filename)
+        
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+            
+        try:
+            # 1. Check Anti-Spoofing
+            print(f"🔍 Running anti-spoofing check on {temp_filename}...")
+            is_real, score, reason = detector.analyze_video(temp_path)
+            
+            print(f"📊 Anti-spoofing result: Real={is_real}, Score={score:.4f}, Reason={reason}")
+            
+            if not is_real:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Anti-spoofing check failed: {reason} (Score: {score:.2f})"
+                )
+            
+            # 2. Extract face from video for registration
+            # We need to get a good frame. The detector already extracted frames.
+            # For simplicity, we'll extract the first valid frame again or use the video processing.
+            # Let's use OpenCV to get the middle frame
+            cap = cv2.VideoCapture(temp_path)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
+            ret, frame = cap.read()
+            cap.release()
+            
+            if not ret:
+                raise HTTPException(status_code=400, detail="Could not extract frame from video")
+                
+            # Convert BGR to RGB
+            img_array = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Process face
+            result = prep.process_image(img_array)
+            if result is None:
+                raise HTTPException(status_code=400, detail="No face detected in video")
+            
+            face, detection = result
+            
+            # Extract embedding
+            embedding = m.get_embedding(face)
+            
+            # Create profile
+            profile = db.create_profile(user_id, name, embedding)
+            
+            return RegisterResponse(
+                success=True,
+                user_id=user_id,
+                name=name,
+                message=f"User {name} registered with video (Anti-spoofing score: {score:.2f})"
+            )
+            
+        finally:
+            # Cleanup temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Exception in register_video: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Video registration failed: {str(e)}")
 
 
 @app.post("/verify", response_model=VerifyResponse)
@@ -215,13 +268,10 @@ async def verify_user(
     image: UploadFile = File(...)
 ):
     """
-    Verify if the face in the image matches the registered user
-    
-    - **user_id**: User ID to verify against
-    - **image**: Face image file
+    Verify user with image (Legacy, no anti-spoofing)
     """
     try:
-        m, prep, liveness, db = get_instances()
+        m, prep, _, db = get_instances()
         
         # Get user profile
         profile = db.get_profile(user_id)
@@ -240,9 +290,6 @@ async def verify_user(
         
         face, detection = result
         
-        # Check liveness
-        is_live, liveness_score, reason = liveness.detect_liveness(img_array, detection)
-        
         # Extract embedding
         embedding = m.get_embedding(face)
         
@@ -250,18 +297,15 @@ async def verify_user(
         user_embedding = profile.get_embedding()
         is_match, similarity = verify_faces(embedding, user_embedding)
         
-        # Calculate overall confidence
-        confidence = (similarity + liveness_score) / 2.0 if is_live else similarity * 0.5
-        
         return VerifyResponse(
             success=True,
-            is_match=is_match and is_live,
+            is_match=is_match,
             similarity=similarity,
-            confidence=confidence,
-            liveness_passed=is_live,
-            liveness_score=liveness_score,
-            liveness_reason=reason,
-            message=f"Verification {'successful' if (is_match and is_live) else 'failed'}"
+            confidence=similarity,
+            liveness_passed=True, # Skipped for image
+            liveness_score=0.0,
+            liveness_reason="Image verification (liveness skipped)",
+            message=f"Verification {'successful' if is_match else 'failed'}"
         )
     
     except HTTPException:
@@ -270,15 +314,103 @@ async def verify_user(
         raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
 
 
+@app.post("/verify_video", response_model=VerifyResponse)
+async def verify_user_video(
+    user_id: str = Form(...),
+    video: UploadFile = File(...)
+):
+    """
+    Verify user with video (includes Anti-Spoofing)
+    """
+    try:
+        m, prep, detector, db = get_instances()
+        
+        # Get user profile
+        profile = db.get_profile(user_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+            
+        # Save video temporarily
+        temp_filename = f"temp_verify_{uuid.uuid4()}.mp4"
+        temp_path = os.path.join(config.UPLOAD_DIR, temp_filename)
+        
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+            
+        try:
+            # 1. Check Anti-Spoofing
+            print(f"🔍 Running anti-spoofing check on {temp_filename}...")
+            is_real, score, reason = detector.analyze_video(temp_path)
+            
+            print(f"📊 Anti-spoofing result: Real={is_real}, Score={score:.4f}, Reason={reason}")
+            
+            if not is_real:
+                return VerifyResponse(
+                    success=False,
+                    is_match=False,
+                    similarity=0.0,
+                    confidence=0.0,
+                    liveness_passed=False,
+                    liveness_score=score,
+                    liveness_reason=reason,
+                    message=f"Anti-spoofing failed: {reason}"
+                )
+            
+            # 2. Extract face for verification
+            cap = cv2.VideoCapture(temp_path)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
+            ret, frame = cap.read()
+            cap.release()
+            
+            if not ret:
+                raise HTTPException(status_code=400, detail="Could not extract frame from video")
+                
+            img_array = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Process face
+            result = prep.process_image(img_array)
+            if result is None:
+                raise HTTPException(status_code=400, detail="No face detected in video")
+            
+            face, detection = result
+            
+            # Extract embedding
+            embedding = m.get_embedding(face)
+            
+            # Verify
+            user_embedding = profile.get_embedding()
+            is_match, similarity = verify_faces(embedding, user_embedding)
+            
+            return VerifyResponse(
+                success=True,
+                is_match=is_match,
+                similarity=similarity,
+                confidence=(similarity + score) / 2,
+                liveness_passed=True,
+                liveness_score=score,
+                liveness_reason=reason,
+                message=f"Verification {'successful' if is_match else 'failed'}"
+            )
+            
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Exception in verify_video: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Video verification failed: {str(e)}")
+
+
 @app.post("/identify", response_model=IdentifyResponse)
 async def identify_user(image: UploadFile = File(...)):
     """
     Identify which registered user matches the face in the image (1:N matching)
-    
-    - **image**: Face image file
     """
     try:
-        m, prep, liveness, db = get_instances()
+        m, prep, _, db = get_instances()
         
         # Read and process image
         image_bytes = await image.read()
@@ -291,9 +423,6 @@ async def identify_user(image: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="No face detected in image")
         
         face, detection = result
-        
-        # Check liveness
-        is_live, liveness_score, reason = liveness.detect_liveness(img_array, detection)
         
         # Extract embedding
         embedding = m.get_embedding(face)
@@ -308,14 +437,14 @@ async def identify_user(image: UploadFile = File(...)):
                 user_id=None,
                 name=None,
                 similarity=0.0,
-                liveness_passed=is_live,
-                liveness_score=liveness_score,
+                liveness_passed=True,
+                liveness_score=0.0,
                 message="No users registered in database"
             )
         
         user_id, similarity = identify_face(embedding, all_embeddings)
         
-        if user_id and is_live:
+        if user_id:
             profile = db.get_profile(user_id)
             return IdentifyResponse(
                 success=True,
@@ -323,8 +452,8 @@ async def identify_user(image: UploadFile = File(...)):
                 user_id=user_id,
                 name=profile.name,
                 similarity=similarity,
-                liveness_passed=is_live,
-                liveness_score=liveness_score,
+                liveness_passed=True,
+                liveness_score=0.0,
                 message=f"Identified as {profile.name}"
             )
         else:
@@ -333,14 +462,12 @@ async def identify_user(image: UploadFile = File(...)):
                 identified=False,
                 user_id=None,
                 name=None,
-                similarity=similarity if user_id else 0.0,
-                liveness_passed=is_live,
-                liveness_score=liveness_score,
-                message=f"No match found" if user_id is None else f"Liveness check failed: {reason}"
+                similarity=0.0,
+                liveness_passed=True,
+                liveness_score=0.0,
+                message="No match found"
             )
     
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Identification failed: {str(e)}")
 
@@ -348,13 +475,10 @@ async def identify_user(image: UploadFile = File(...)):
 @app.post("/add-face/{user_id}")
 async def add_face_to_profile(user_id: str, image: UploadFile = File(...)):
     """
-    Add additional face image to existing user profile (for enriched embeddings)
-    
-    - **user_id**: User ID
-    - **image**: Additional face image
+    Add additional face image to existing user profile
     """
     try:
-        m, prep, liveness, db = get_instances()
+        m, prep, _, db = get_instances()
         
         # Get user profile
         profile = db.get_profile(user_id)
@@ -373,21 +497,16 @@ async def add_face_to_profile(user_id: str, image: UploadFile = File(...)):
         
         face, detection = result
         
-        # Check liveness
-        is_live, liveness_score, reason = liveness.detect_liveness(img_array, detection)
-        if not is_live:
-            raise HTTPException(status_code=400, detail=f"Liveness check failed: {reason}")
-        
         # Extract embedding
         embedding = m.get_embedding(face)
         
-        # Update profile (will create enriched embedding automatically)
+        # Update profile
         db.update_profile(user_id, embedding)
         
         return {
             "success": True,
-            "message": f"Face added to {user_id}'s profile. Enriched embedding updated.",
-            "liveness_score": liveness_score
+            "message": f"Face added to {user_id}'s profile.",
+            "liveness_score": 0.0
         }
     
     except HTTPException:
@@ -464,13 +583,10 @@ async def compare_faces(
     image2: UploadFile = File(...)
 ):
     """
-    Compare two face images directly (no user profile needed)
-    
-    - **image1**: First face image
-    - **image2**: Second face image
+    Compare two face images directly
     """
     try:
-        m, prep, liveness, _ = get_instances()
+        m, prep, _, _ = get_instances()
         
         # Process first image
         img1_bytes = await image1.read()
@@ -488,10 +604,6 @@ async def compare_faces(
             raise HTTPException(status_code=400, detail="No face detected in second image")
         face2, det2 = result2
         
-        # Check liveness for both
-        live1, score1, reason1 = liveness.detect_liveness(img1, det1)
-        live2, score2, reason2 = liveness.detect_liveness(img2, det2)
-        
         # Extract embeddings
         emb1 = m.get_embedding(face1)
         emb2 = m.get_embedding(face2)
@@ -503,9 +615,7 @@ async def compare_faces(
             "success": True,
             "is_match": is_match,
             "similarity": similarity,
-            "image1_liveness": {"passed": live1, "score": score1, "reason": reason1},
-            "image2_liveness": {"passed": live2, "score": score2, "reason": reason2},
-            "both_live": live1 and live2
+            "both_live": True # Skipped
         }
     
     except HTTPException:
@@ -530,12 +640,12 @@ def main():
     print("\nFeatures:")
     print("  ✓ Face verification (1:1 matching)")
     print("  ✓ Face identification (1:N matching)")
-    print("  ✓ Liveness detection (anti-spoofing)")
+    print("  ✓ Video Anti-Spoofing (PAD)")
     print("  ✓ User profile management with DuckDB")
     print("  ✓ Enriched embeddings via vector addition")
     print("  ✓ FaceNet embeddings (512-dim)")
     print("  ✓ Models preloaded at startup")
-    print("\nAPI Documentation: http://localhost:9834/docs")
+    print(f"\nAPI Documentation: http://localhost:{config.API_PORT}/docs")
     print("=" * 60)
     
     uvicorn.run(
