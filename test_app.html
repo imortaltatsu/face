@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Face Verification Test App</title>
+    <title>Face Verification & Anti-Spoofing</title>
     <style>
         * {
             margin: 0;
@@ -130,16 +130,63 @@
             border-radius: 12px;
             overflow: hidden;
             margin: 20px 0;
+            aspect-ratio: 4/3;
         }
 
-        video,
-        canvas {
+        video {
             width: 100%;
+            height: 100%;
+            object-fit: cover;
             display: block;
-            border-radius: 12px;
         }
 
-        canvas {
+        .recording-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            animation: pulse 1s infinite;
+        }
+
+        .recording-indicator::before {
+            content: '';
+            display: block;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 5em;
+            color: white;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
             display: none;
         }
 
@@ -182,18 +229,20 @@
             background: #5a6268;
         }
 
-        .btn-success {
-            background: #28a745;
+        .btn-danger {
+            background: #dc3545;
             color: white;
         }
 
-        .btn-success:hover {
-            background: #218838;
+        .btn-danger:hover {
+            background: #c82333;
         }
 
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
         }
 
         .result {
@@ -255,10 +304,6 @@
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         }
 
-        .result-details div:last-child {
-            border-bottom: none;
-        }
-
         .score-bar {
             height: 8px;
             background: #e0e0e0;
@@ -303,50 +348,6 @@
             }
         }
 
-        .user-list {
-            margin-top: 20px;
-        }
-
-        .user-card {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .user-info {
-            flex: 1;
-        }
-
-        .user-name {
-            font-weight: 600;
-            font-size: 1.1em;
-            color: #333;
-        }
-
-        .user-meta {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 600;
-            margin-left: 10px;
-        }
-
-        .badge-success {
-            background: #d4edda;
-            color: #155724;
-        }
-
         .api-status {
             text-align: center;
             padding: 15px;
@@ -377,23 +378,14 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔐 Face Verification System</h1>
-            <p>Secure authentication with liveness detection</p>
+            <h1>🛡️ Face Anti-Spoofing System</h1>
+            <p>Secure verification with video-based liveness detection</p>
         </div>
 
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('register')">
-                📝 Register
-            </div>
-            <div class="tab" onclick="switchTab('verify')">
-                ✅ Verify
-            </div>
-            <div class="tab" onclick="switchTab('identify')">
-                🔍 Identify
-            </div>
-            <div class="tab" onclick="switchTab('users')">
-                👥 Users
-            </div>
+            <div class="tab active" onclick="switchTab('register')">📝 Register</div>
+            <div class="tab" onclick="switchTab('verify')">✅ Verify</div>
+            <div class="tab" onclick="switchTab('users')">👥 Users</div>
         </div>
 
         <div class="content">
@@ -415,22 +407,21 @@
                 </div>
 
                 <div class="camera-container">
-                    <video id="registerVideo" autoplay playsinline></video>
-                    <canvas id="registerCanvas"></canvas>
+                    <video id="registerVideo" autoplay playsinline muted></video>
+                    <div class="recording-indicator" id="registerIndicator">REC</div>
+                    <div class="countdown" id="registerCountdown">3</div>
                 </div>
 
                 <div class="camera-controls">
-                    <button class="btn-secondary" onclick="startCamera('register')">
-                        📷 Start Camera
-                    </button>
-                    <button class="btn-primary" onclick="captureAndRegister()" id="registerBtn" disabled>
-                        ✨ Capture & Register
+                    <button class="btn-secondary" onclick="startCamera('register')">📷 Start Camera</button>
+                    <button class="btn-primary" onclick="startRecording('register')" id="registerBtn" disabled>
+                        🎥 Record & Register (3s)
                     </button>
                 </div>
 
                 <div class="loading" id="registerLoading">
                     <div class="spinner"></div>
-                    <p>Registering user...</p>
+                    <p>Analyzing video for liveness...</p>
                 </div>
 
                 <div class="result" id="registerResult"></div>
@@ -438,79 +429,47 @@
 
             <!-- Verify Tab -->
             <div id="verify" class="tab-content">
-                <h2>Verify User Identity</h2>
+                <h2>Verify Identity</h2>
                 <div class="form-group">
                     <label for="verifyUserId">User ID to Verify</label>
                     <input type="text" id="verifyUserId" placeholder="e.g., user123">
                 </div>
 
                 <div class="camera-container">
-                    <video id="verifyVideo" autoplay playsinline></video>
-                    <canvas id="verifyCanvas"></canvas>
+                    <video id="verifyVideo" autoplay playsinline muted></video>
+                    <div class="recording-indicator" id="verifyIndicator">REC</div>
+                    <div class="countdown" id="verifyCountdown">3</div>
                 </div>
 
                 <div class="camera-controls">
-                    <button class="btn-secondary" onclick="startCamera('verify')">
-                        📷 Start Camera
-                    </button>
-                    <button class="btn-primary" onclick="captureAndVerify()" id="verifyBtn" disabled>
-                        🔍 Capture & Verify
+                    <button class="btn-secondary" onclick="startCamera('verify')">📷 Start Camera</button>
+                    <button class="btn-primary" onclick="startRecording('verify')" id="verifyBtn" disabled>
+                        🎥 Record & Verify (3s)
                     </button>
                 </div>
 
                 <div class="loading" id="verifyLoading">
                     <div class="spinner"></div>
-                    <p>Verifying identity...</p>
+                    <p>Verifying liveness and identity...</p>
                 </div>
 
                 <div class="result" id="verifyResult"></div>
             </div>
 
-            <!-- Identify Tab -->
-            <div id="identify" class="tab-content">
-                <h2>Identify User (1:N Matching)</h2>
-                <p style="margin-bottom: 20px; color: #666;">
-                    Capture a face and the system will identify which registered user it belongs to.
-                </p>
-
-                <div class="camera-container">
-                    <video id="identifyVideo" autoplay playsinline></video>
-                    <canvas id="identifyCanvas"></canvas>
-                </div>
-
-                <div class="camera-controls">
-                    <button class="btn-secondary" onclick="startCamera('identify')">
-                        📷 Start Camera
-                    </button>
-                    <button class="btn-primary" onclick="captureAndIdentify()" id="identifyBtn" disabled>
-                        🔍 Capture & Identify
-                    </button>
-                </div>
-
-                <div class="loading" id="identifyLoading">
-                    <div class="spinner"></div>
-                    <p>Identifying user...</p>
-                </div>
-
-                <div class="result" id="identifyResult"></div>
-            </div>
-
             <!-- Users Tab -->
             <div id="users" class="tab-content">
                 <h2>Registered Users</h2>
-                <button class="btn-primary" onclick="loadUsers()" style="margin-bottom: 20px;">
-                    🔄 Refresh List
-                </button>
-                <div class="user-list" id="userList">
-                    <p style="color: #666;">Click refresh to load users...</p>
-                </div>
+                <button class="btn-primary" onclick="loadUsers()" style="margin-bottom: 20px;">🔄 Refresh List</button>
+                <div id="userList"></div>
             </div>
         </div>
     </div>
 
     <script>
-        const API_URL = 'https://face.adityaberry.me';
+        const API_URL = 'http://localhost:9834';
         let currentStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
 
         // Check API status
         async function checkAPIStatus() {
@@ -521,48 +480,33 @@
                 document.getElementById('statusText').textContent = `API Online - ${data.service}`;
             } catch (error) {
                 document.getElementById('statusIndicator').className = 'status-indicator status-offline';
-                document.getElementById('statusText').textContent = 'API Offline - Please start the server';
+                document.getElementById('statusText').textContent = 'API Offline - Please start server';
             }
         }
 
-        // Switch tabs
         function switchTab(tabName) {
-            // Stop camera when switching tabs
             stopCamera();
-
-            // Update tab buttons
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             event.target.classList.add('active');
-
-            // Update tab content
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
-
-            // Load users if switching to users tab
-            if (tabName === 'users') {
-                loadUsers();
-            }
+            if (tabName === 'users') loadUsers();
         }
 
-        // Start camera
         async function startCamera(type) {
             try {
-                stopCamera(); // Stop any existing stream
-
+                stopCamera();
                 const video = document.getElementById(`${type}Video`);
                 currentStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'user', width: 640, height: 480 }
+                    video: { width: 640, height: 480, frameRate: 30 }
                 });
                 video.srcObject = currentStream;
-
-                // Enable capture button
                 document.getElementById(`${type}Btn`).disabled = false;
             } catch (error) {
-                showResult(type, 'error', 'Camera Error', `Failed to access camera: ${error.message}`);
+                alert(`Camera Error: ${error.message}`);
             }
         }
 
-        // Stop camera
         function stopCamera() {
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
@@ -570,215 +514,169 @@
             }
         }
 
-        // Capture image from video
-        function captureImage(type) {
-            const video = document.getElementById(`${type}Video`);
-            const canvas = document.getElementById(`${type}Canvas`);
-            const context = canvas.getContext('2d');
+        function startRecording(type) {
+            const btn = document.getElementById(`${type}Btn`);
+            const countdownEl = document.getElementById(`${type}Countdown`);
+            const indicator = document.getElementById(`${type}Indicator`);
 
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0);
+            btn.disabled = true;
 
-            return new Promise((resolve) => {
-                canvas.toBlob(resolve, 'image/jpeg', 0.95);
-            });
+            // Countdown
+            let count = 3;
+            countdownEl.style.display = 'block';
+            countdownEl.textContent = count;
+
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.textContent = count;
+                } else {
+                    clearInterval(timer);
+                    countdownEl.style.display = 'none';
+                    recordVideo(type);
+                }
+            }, 1000);
         }
 
-        // Register user
-        async function captureAndRegister() {
+        function recordVideo(type) {
+            recordedChunks = [];
+            const indicator = document.getElementById(`${type}Indicator`);
+
+            try {
+                mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm' });
+            } catch (e) {
+                mediaRecorder = new MediaRecorder(currentStream); // Fallback
+            }
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) recordedChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                indicator.style.display = 'none';
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                if (type === 'register') submitRegister(blob);
+                else submitVerify(blob);
+            };
+
+            mediaRecorder.start();
+            indicator.style.display = 'flex';
+
+            // Stop after 3 seconds
+            setTimeout(() => {
+                mediaRecorder.stop();
+            }, 3000);
+        }
+
+        async function submitRegister(videoBlob) {
             const userId = document.getElementById('userId').value.trim();
             const userName = document.getElementById('userName').value.trim();
 
             if (!userId || !userName) {
-                showResult('register', 'error', 'Validation Error', 'Please enter both User ID and Name');
+                alert('Please enter User ID and Name');
                 return;
             }
 
+            showLoading('register', true);
+
+            const formData = new FormData();
+            formData.append('user_id', userId);
+            formData.append('name', userName);
+            formData.append('video', videoBlob, 'video.webm');
+
             try {
-                document.getElementById('registerLoading').classList.add('show');
-                document.getElementById('registerResult').classList.remove('show');
-
-                const imageBlob = await captureImage('register');
-                const formData = new FormData();
-                formData.append('user_id', userId);
-                formData.append('name', userName);
-                formData.append('image', imageBlob, 'face.jpg');
-
-                const response = await fetch(`${API_URL}/register`, {
+                const response = await fetch(`${API_URL}/register_video`, {
                     method: 'POST',
                     body: formData
                 });
-
                 const data = await response.json();
 
                 if (response.ok) {
                     showResult('register', 'success', '✅ Registration Successful',
-                        `User <strong>${data.name}</strong> (${data.user_id}) has been registered successfully!`);
-
-                    // Clear form
-                    document.getElementById('userId').value = '';
-                    document.getElementById('userName').value = '';
+                        `User registered with video liveness check!`);
                 } else {
                     showResult('register', 'error', '❌ Registration Failed', data.detail);
                 }
             } catch (error) {
                 showResult('register', 'error', '❌ Error', error.message);
             } finally {
-                document.getElementById('registerLoading').classList.remove('show');
+                showLoading('register', false);
+                document.getElementById('registerBtn').disabled = false;
             }
         }
 
-        // Verify user
-        async function captureAndVerify() {
+        async function submitVerify(videoBlob) {
             const userId = document.getElementById('verifyUserId').value.trim();
 
             if (!userId) {
-                showResult('verify', 'error', 'Validation Error', 'Please enter User ID');
+                alert('Please enter User ID');
                 return;
             }
 
+            showLoading('verify', true);
+
+            const formData = new FormData();
+            formData.append('user_id', userId);
+            formData.append('video', videoBlob, 'video.webm');
+
             try {
-                document.getElementById('verifyLoading').classList.add('show');
-                document.getElementById('verifyResult').classList.remove('show');
-
-                const imageBlob = await captureImage('verify');
-                const formData = new FormData();
-                formData.append('user_id', userId);
-                formData.append('image', imageBlob, 'face.jpg');
-
-                const response = await fetch(`${API_URL}/verify`, {
+                const response = await fetch(`${API_URL}/verify_video`, {
                     method: 'POST',
                     body: formData
                 });
-
                 const data = await response.json();
 
                 if (response.ok) {
                     const resultType = data.is_match ? 'success' : 'warning';
-                    const icon = data.is_match ? '✅' : '⚠️';
-
                     const details = `
                         <div class="result-details">
                             <div><strong>Match:</strong> ${data.is_match ? 'YES' : 'NO'}</div>
-                            <div>
-                                <strong>Similarity:</strong> ${(data.similarity * 100).toFixed(1)}%
-                                <div class="score-bar">
-                                    <div class="score-fill" style="width: ${data.similarity * 100}%"></div>
-                                </div>
-                            </div>
-                            <div>
-                                <strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%
-                                <div class="score-bar">
-                                    <div class="score-fill" style="width: ${data.confidence * 100}%"></div>
-                                </div>
-                            </div>
-                            <div><strong>Liveness:</strong> ${data.liveness_passed ? '✅ Passed' : '❌ Failed'} (${(data.liveness_score * 100).toFixed(1)}%)</div>
+                            <div><strong>Similarity:</strong> ${(data.similarity * 100).toFixed(1)}%</div>
+                            <div><strong>Liveness:</strong> ${data.liveness_passed ? '✅ Passed' : '❌ Failed'}</div>
+                            <div><strong>Anti-Spoof Score:</strong> ${(data.liveness_score * 100).toFixed(1)}%</div>
                             <div><strong>Reason:</strong> ${data.liveness_reason}</div>
                         </div>
                     `;
-
-                    showResult('verify', resultType, `${icon} ${data.message}`, details);
+                    showResult('verify', resultType, data.message, details);
                 } else {
                     showResult('verify', 'error', '❌ Verification Failed', data.detail);
                 }
             } catch (error) {
                 showResult('verify', 'error', '❌ Error', error.message);
             } finally {
-                document.getElementById('verifyLoading').classList.remove('show');
+                showLoading('verify', false);
+                document.getElementById('verifyBtn').disabled = false;
             }
         }
 
-        // Identify user
-        async function captureAndIdentify() {
-            try {
-                document.getElementById('identifyLoading').classList.add('show');
-                document.getElementById('identifyResult').classList.remove('show');
-
-                const imageBlob = await captureImage('identify');
-                const formData = new FormData();
-                formData.append('image', imageBlob, 'face.jpg');
-
-                const response = await fetch(`${API_URL}/identify`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    if (data.identified) {
-                        const details = `
-                            <div class="result-details">
-                                <div><strong>User ID:</strong> ${data.user_id}</div>
-                                <div><strong>Name:</strong> ${data.name}</div>
-                                <div>
-                                    <strong>Similarity:</strong> ${(data.similarity * 100).toFixed(1)}%
-                                    <div class="score-bar">
-                                        <div class="score-fill" style="width: ${data.similarity * 100}%"></div>
-                                    </div>
-                                </div>
-                                <div><strong>Liveness:</strong> ${data.liveness_passed ? '✅ Passed' : '❌ Failed'} (${(data.liveness_score * 100).toFixed(1)}%)</div>
-                            </div>
-                        `;
-                        showResult('identify', 'success', `✅ ${data.message}`, details);
-                    } else {
-                        showResult('identify', 'warning', '⚠️ No Match Found', data.message);
-                    }
-                } else {
-                    showResult('identify', 'error', '❌ Identification Failed', data.detail);
-                }
-            } catch (error) {
-                showResult('identify', 'error', '❌ Error', error.message);
-            } finally {
-                document.getElementById('identifyLoading').classList.remove('show');
-            }
+        function showLoading(type, show) {
+            document.getElementById(`${type}Loading`).className = show ? 'loading show' : 'loading';
+            document.getElementById(`${type}Result`).className = 'result';
         }
 
-        // Load users
+        function showResult(type, className, title, content) {
+            const el = document.getElementById(`${type}Result`);
+            el.className = `result ${className} show`;
+            el.innerHTML = `<h3>${title}</h3><div>${content}</div>`;
+        }
+
         async function loadUsers() {
             try {
                 const response = await fetch(`${API_URL}/users`);
                 const data = await response.json();
-
-                const userList = document.getElementById('userList');
-
-                if (data.users && data.users.length > 0) {
-                    userList.innerHTML = data.users.map(user => `
-                        <div class="user-card">
-                            <div class="user-info">
-                                <div class="user-name">
-                                    ${user.name}
-                                    <span class="badge badge-success">${user.num_embeddings} embeddings</span>
-                                </div>
-                                <div class="user-meta">
-                                    ID: ${user.user_id} | Created: ${new Date(user.created_at).toLocaleDateString()}
-                                </div>
-                            </div>
-                        </div>
-                    `).join('');
-                } else {
-                    userList.innerHTML = '<p style="color: #666;">No users registered yet.</p>';
-                }
-            } catch (error) {
-                document.getElementById('userList').innerHTML =
-                    `<p style="color: #dc3545;">Failed to load users: ${error.message}</p>`;
+                const list = document.getElementById('userList');
+                list.innerHTML = data.users.map(u => `
+                    <div style="background:#f8f9fa; padding:10px; margin:5px 0; border-radius:5px;">
+                        <strong>${u.name}</strong> (${u.user_id})
+                    </div>
+                `).join('') || 'No users found.';
+            } catch (e) {
+                console.error(e);
             }
         }
 
-        // Show result
-        function showResult(type, resultType, title, message) {
-            const resultDiv = document.getElementById(`${type}Result`);
-            resultDiv.className = `result ${resultType} show`;
-            resultDiv.innerHTML = `
-                <h3>${title}</h3>
-                <div>${message}</div>
-            `;
-        }
-
-        // Initialize
         checkAPIStatus();
-        setInterval(checkAPIStatus, 10000); // Check every 10 seconds
+        setInterval(checkAPIStatus, 10000);
     </script>
 </body>
 
