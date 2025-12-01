@@ -35,7 +35,7 @@ LIVENESS_BLINK_REQUIRED = False
 
 # API settings
 API_HOST = "0.0.0.0"
-API_PORT = 8000
+API_PORT = 9834  # Production server port
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
 
 # Paths
