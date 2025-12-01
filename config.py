@@ -28,8 +28,8 @@ USE_ENRICHED_EMBEDDINGS = True
 
 # Liveness detection settings
 LIVENESS_ENABLED = True
-LIVENESS_THRESHOLD = 0.3  # Lowered from 0.5 for webcam compatibility
-LIVENESS_USE_ML_MODEL = True  # Use ML model instead of heuristics
+LIVENESS_THRESHOLD = 0.6  # For heuristic-based detection
+LIVENESS_USE_ML_MODEL = False  # Disabled - model trained on photos, not webcams
 LIVENESS_MOTION_REQUIRED = False  # Disable for single image
 LIVENESS_BLINK_REQUIRED = False   # Disable for single image
 
