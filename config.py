@@ -28,7 +28,7 @@ USE_ENRICHED_EMBEDDINGS = True
 
 # Liveness detection settings
 LIVENESS_ENABLED = False  # Temporarily disabled - implementing blink detection
-LIVENESS_THRESHOLD = 0.6
+LIVENESS_THRESHOLD = 0.4  # Lowered for Mac camera compatibility
 LIVENESS_USE_ML_MODEL = False
 LIVENESS_MOTION_REQUIRED = False
 LIVENESS_BLINK_REQUIRED = False
