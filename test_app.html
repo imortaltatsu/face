@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -87,8 +88,15 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .form-group {
@@ -124,7 +132,8 @@
             margin: 20px 0;
         }
 
-        video, canvas {
+        video,
+        canvas {
             width: 100%;
             display: block;
             border-radius: 12px;
@@ -200,8 +209,15 @@
         }
 
         @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         .result.success {
@@ -236,7 +252,7 @@
 
         .result-details div {
             padding: 8px 0;
-            border-bottom: 1px solid rgba(0,0,0,0.1);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         }
 
         .result-details div:last-child {
@@ -278,8 +294,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .user-list {
@@ -352,6 +373,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -487,7 +509,7 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:8000';
+        const API_URL = 'https://face.adityaberry.me';
         let currentStream = null;
 
         // Check API status
@@ -528,8 +550,8 @@
                 stopCamera(); // Stop any existing stream
 
                 const video = document.getElementById(`${type}Video`);
-                currentStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'user', width: 640, height: 480 } 
+                currentStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: 640, height: 480 }
                 });
                 video.srcObject = currentStream;
 
@@ -591,9 +613,9 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    showResult('register', 'success', '✅ Registration Successful', 
+                    showResult('register', 'success', '✅ Registration Successful',
                         `User <strong>${data.name}</strong> (${data.user_id}) has been registered successfully!`);
-                    
+
                     // Clear form
                     document.getElementById('userId').value = '';
                     document.getElementById('userName').value = '';
@@ -635,7 +657,7 @@
                 if (response.ok) {
                     const resultType = data.is_match ? 'success' : 'warning';
                     const icon = data.is_match ? '✅' : '⚠️';
-                    
+
                     const details = `
                         <div class="result-details">
                             <div><strong>Match:</strong> ${data.is_match ? 'YES' : 'NO'}</div>
@@ -655,7 +677,7 @@
                             <div><strong>Reason:</strong> ${data.liveness_reason}</div>
                         </div>
                     `;
-                    
+
                     showResult('verify', resultType, `${icon} ${data.message}`, details);
                 } else {
                     showResult('verify', 'error', '❌ Verification Failed', data.detail);
@@ -720,7 +742,7 @@
                 const data = await response.json();
 
                 const userList = document.getElementById('userList');
-                
+
                 if (data.users && data.users.length > 0) {
                     userList.innerHTML = data.users.map(user => `
                         <div class="user-card">
@@ -739,7 +761,7 @@
                     userList.innerHTML = '<p style="color: #666;">No users registered yet.</p>';
                 }
             } catch (error) {
-                document.getElementById('userList').innerHTML = 
+                document.getElementById('userList').innerHTML =
                     `<p style="color: #dc3545;">Failed to load users: ${error.message}</p>`;
             }
         }
@@ -759,4 +781,5 @@
         setInterval(checkAPIStatus, 10000); // Check every 10 seconds
     </script>
 </body>
+
 </html>
