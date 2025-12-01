@@ -167,7 +167,17 @@ async def register_user(
         face, detection = result
         
         # Check liveness
+        print(f"🔍 Calling liveness detection...")
+        print(f"   Image shape: {img_array.shape}")
+        print(f"   Detection box: {detection}")
+        
         is_live, liveness_score, reason = liveness.detect_liveness(img_array, detection)
+        
+        print(f"📊 Liveness result:")
+        print(f"   is_live: {is_live}")
+        print(f"   score: {liveness_score}")
+        print(f"   reason: {reason}")
+        
         if not is_live:
             raise HTTPException(
                 status_code=400, 
