@@ -1,136 +1,111 @@
 """
-CelebA-Spoof Dataset Helper
+CelebA-Spoof Dataset Downloader (using gdown)
 
-1. Provides direct links for Google Drive and Baidu Drive.
-2. Monitors directory for downloaded files.
-3. Automatically unzips and organizes the dataset.
-4. Handles multi-part zip files if present.
+1. Automatically installs gdown if missing.
+2. Downloads the full CelebA-Spoof dataset folder from Google Drive.
+3. Automatically unzips downloaded archives.
 """
 
 import os
 import sys
+import subprocess
 import zipfile
 from pathlib import Path
-import time
 import shutil
 
-class DatasetHelper:
-    """Helper for managing CelebA-Spoof dataset"""
+def install_gdown():
+    """Install gdown if not present"""
+    try:
+        import gdown
+        print("✅ gdown is already installed.")
+    except ImportError:
+        print("📦 Installing gdown...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown"])
+            print("✅ gdown installed successfully.")
+        except Exception as e:
+            print(f"❌ Failed to install gdown: {e}")
+            sys.exit(1)
+
+class DatasetDownloader:
+    """Automated dataset downloader using gdown"""
     
     def __init__(self, output_dir='data/video_liveness'):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.celeba_dir = self.output_dir / 'celeba_spoof'
+        # gdown downloads into the folder, so we point to the parent
         self.celeba_dir.mkdir(exist_ok=True)
         
-    def show_instructions(self):
-        """Print download instructions"""
+    def download_celeba_spoof(self):
+        """Download CelebA-Spoof using gdown folder download"""
+        import gdown
+        
+        url = "https://drive.google.com/drive/folders/1OW_1bawO79pRqdVEVmBzp8HSxdSwln_Z?usp=sharing"
         print("\n" + "="*70)
-        print("📥 CelebA-Spoof Dataset Download Helper")
+        print("📥 Downloading CelebA-Spoof Dataset via gdown...")
         print("="*70)
-        print("\nAutomated download is restricted by file host protections.")
-        print("Please download the dataset manually using one of the links below:")
+        print(f"URL: {url}")
+        print(f"Output: {self.celeba_dir}")
         
-        print("\nOPTION 1: Google Drive (Recommended)")
-        print("🔗 Link: https://drive.google.com/drive/folders/1OW_1bawO79pRqdVEVmBzp8HSxdSwln_Z?usp=sharing")
-        print("💡 Tip:  Use the 'Download all' button in Google Drive to get a single zip or split parts.")
+        try:
+            # Download the folder
+            # --folder flag equivalent
+            gdown.download_folder(url, output=str(self.celeba_dir), quiet=False, use_cookies=False)
+            print("\n✅ Download complete.")
+            return True
+        except Exception as e:
+            print(f"\n❌ gdown failed: {e}")
+            print("Possible reasons:")
+            print("1. Google Drive rate limits (try again later)")
+            print("2. Network issues")
+            return False
+
+    def unzip_files(self):
+        """Unzip all zip files in the directory"""
+        print(f"\n📦 Checking for zip files to extract in {self.celeba_dir}...")
         
-        print("\nOPTION 2: Baidu Drive")
-        print("🔗 Link:     https://pan.baidu.com/s/12qe13-jFJ9pE-_E3iSZtkw")
-        print("🔑 Password: 61fd")
-        
-        print(f"\n📂 DESTINATION: {self.celeba_dir.absolute()}")
-        print("\nINSTRUCTIONS:")
-        print("1. Download the files (zip archives).")
-        print(f"2. Move/Copy them to: {self.celeba_dir}")
-        print("3. This script will automatically detect and unzip them.")
-        print("="*70)
-        
-    def check_and_unzip(self):
-        """Check for zip files and unzip them"""
-        print(f"\n🔍 Checking for files in {self.celeba_dir}...")
-        
-        # Look for zip files
-        zip_files = sorted(list(self.celeba_dir.glob('*.zip*')))
+        zip_files = sorted(list(self.celeba_dir.glob('**/*.zip')))
         
         if not zip_files:
-            print("❌ No zip files found.")
-            print("   Waiting for you to download files...")
-            return False
-            
-        print(f"✅ Found {len(zip_files)} zip files.")
+            print("   No zip files found.")
+            return
+
+        print(f"   Found {len(zip_files)} zip files.")
         
-        # Filter out already extracted ones (heuristic)
-        files_to_process = []
-        for zf in zip_files:
-            # Ignore partial parts like .z01, .z02 unless it's the main .zip
-            if zf.suffix != '.zip' and '.zip' in zf.name:
+        for zip_path in zip_files:
+            # Check if likely already extracted
+            extract_dir = zip_path.parent / zip_path.stem
+            if extract_dir.exists() and extract_dir.is_dir():
+                # print(f"   ℹ️  {zip_path.name} seems extracted. Skipping.")
                 continue
                 
-            # Check if likely extracted
-            possible_dir = zf.parent / zf.stem
-            if possible_dir.exists() and possible_dir.is_dir():
-                # print(f"   ℹ️  {zf.name} seems already extracted (folder exists).")
-                pass
-            else:
-                files_to_process.append(zf)
-        
-        if not files_to_process:
-            print("   All zip files appear to be extracted already.")
-            return True
-
-        for zip_path in files_to_process:
-            print(f"\n📦 Processing {zip_path.name}...")
+            print(f"   Unzipping {zip_path.name}...")
             try:
-                print(f"   Unzipping to {zip_path.parent}...")
-                
-                # Handle multi-part zips if needed (basic support)
-                # Usually standard zipfile handles it if you open the .zip file
-                
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    # Get list of files for progress bar
-                    members = zip_ref.infolist()
-                    for member in tqdm(members, desc="Extracting", unit="file"):
-                        zip_ref.extract(member, zip_path.parent)
-                        
-                print(f"   ✅ Unzipped successfully")
-                
-                # Optional: Rename/Move logic could go here if structure is messy
-                
+                    zip_ref.extractall(zip_path.parent)
+                print(f"   ✅ Extracted")
             except zipfile.BadZipFile:
-                print(f"   ❌ Error: {zip_path.name} is not a valid zip file (or download incomplete)")
+                print(f"   ❌ Error: Invalid zip file")
             except Exception as e:
                 print(f"   ❌ Error: {e}")
-                
-        return True
 
     def run(self):
         """Main execution flow"""
-        self.show_instructions()
+        install_gdown()
         
-        # Check immediately
-        if self.check_and_unzip():
-            print("\n✅ Dataset preparation complete!")
-            return
-            
-        # Polling loop
-        print("\nChecking again in 10 seconds... (Press Ctrl+C to stop)")
-        try:
-            while True:
-                time.sleep(10)
-                if self.check_and_unzip():
-                    print("\n✅ Dataset preparation complete!")
-                    # Don't break immediately, keep watching for more files? 
-                    # Or break if we think we are done. 
-                    # Let's keep watching in case they download sequentially.
-                    print("   Watching for more files...")
-        except KeyboardInterrupt:
-            print("\nStopped.")
+        if self.download_celeba_spoof():
+            self.unzip_files()
+            print("\n" + "="*70)
+            print("✅ DATASET PREPARATION COMPLETE")
+            print("="*70)
+        else:
+            print("\n❌ Dataset preparation failed.")
 
 
 def main():
-    helper = DatasetHelper()
-    helper.run()
+    downloader = DatasetDownloader()
+    downloader.run()
 
 
 if __name__ == '__main__':
