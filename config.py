@@ -28,10 +28,10 @@ USE_ENRICHED_EMBEDDINGS = True
 
 # Liveness detection settings
 LIVENESS_ENABLED = True
-LIVENESS_THRESHOLD = 0.5
+LIVENESS_THRESHOLD = 0.3  # Lowered from 0.5 for webcam compatibility
 LIVENESS_USE_ML_MODEL = True  # Use ML model instead of heuristics
-LIVENESS_MOTION_REQUIRED = True  # Require head movement
-LIVENESS_BLINK_REQUIRED = True   # Require eye blink
+LIVENESS_MOTION_REQUIRED = False  # Disable for single image
+LIVENESS_BLINK_REQUIRED = False   # Disable for single image
 
 # API settings
 API_HOST = "0.0.0.0"

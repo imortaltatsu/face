@@ -188,8 +188,14 @@ async def register_user(
         )
     
     except ValueError as e:
+        print(f"❌ ValueError in register: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        print(f"❌ Exception in register: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 

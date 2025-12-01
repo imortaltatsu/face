@@ -139,6 +139,11 @@ class LivenessDetector:
         try:
             prediction = self.model.predict(face_batch, verbose=0)[0][0]
             
+            print(f"🔍 Liveness Debug:")
+            print(f"   Raw prediction: {prediction}")
+            print(f"   Face shape: {face_region.shape}")
+            print(f"   Resized shape: {face_resized.shape}")
+            
             # Since model isn't fine-tuned, use features + heuristics
             # The model's intermediate features are still useful
             liveness_score = float(prediction)
@@ -148,15 +153,23 @@ class LivenessDetector:
             gray = cv2.cvtColor(face_region, cv2.COLOR_RGB2GRAY)
             laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
             
+            print(f"   Laplacian variance: {laplacian_var:.2f}")
+            
             # Combine ML prediction with variance check
             # Webcam: 50-200, Photos: >200
             if laplacian_var > 250:
                 liveness_score *= 0.7  # Penalize too-sharp images
+                print(f"   Applied sharp penalty: {liveness_score}")
             elif laplacian_var < 40:
                 liveness_score *= 0.8  # Penalize too-blurry images
+                print(f"   Applied blur penalty: {liveness_score}")
             
             threshold = config.LIVENESS_THRESHOLD
             is_live = liveness_score >= threshold
+            
+            print(f"   Final score: {liveness_score:.4f}")
+            print(f"   Threshold: {threshold}")
+            print(f"   Result: {'LIVE' if is_live else 'FAKE'}")
             
             if not is_live:
                 if laplacian_var > 250:
