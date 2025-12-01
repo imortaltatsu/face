@@ -27,11 +27,11 @@ EMBEDDINGS_PER_USER = 5
 USE_ENRICHED_EMBEDDINGS = True
 
 # Liveness detection settings
-LIVENESS_ENABLED = True
-LIVENESS_THRESHOLD = 0.6  # For heuristic-based detection
-LIVENESS_USE_ML_MODEL = False  # Disabled - model trained on photos, not webcams
-LIVENESS_MOTION_REQUIRED = False  # Disable for single image
-LIVENESS_BLINK_REQUIRED = False   # Disable for single image
+LIVENESS_ENABLED = False  # Temporarily disabled - implementing blink detection
+LIVENESS_THRESHOLD = 0.6
+LIVENESS_USE_ML_MODEL = False
+LIVENESS_MOTION_REQUIRED = False
+LIVENESS_BLINK_REQUIRED = False
 
 # API settings
 API_HOST = "0.0.0.0"
