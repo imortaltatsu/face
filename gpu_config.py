@@ -101,8 +101,40 @@ def configure_multi_gpu_strategy():
         print("\n💻 Single GPU Training")
         return tf.distribute.get_strategy()  # Default strategy
     else:
-        print("\n⚠️  CPU Training (no GPU found)")
         return tf.distribute.get_strategy()
+
+
+def setup_gpu_strategy(base_batch_size=16):
+    """
+    Setup GPU strategy and calculate total batch size
+    
+    Args:
+        base_batch_size: Batch size per GPU
+        
+    Returns:
+        (strategy, num_gpus, total_batch_size)
+    """
+    gpus = tf.config.list_physical_devices('GPU')
+    num_gpus = len(gpus)
+    
+    if num_gpus > 1:
+        print(f"\n🚀 Multi-GPU Training: {num_gpus} GPUs")
+        # Use NCCL for fast multi-GPU communication
+        strategy = tf.distribute.MirroredStrategy(
+            cross_device_ops=tf.distribute.NcclAllReduce()
+        )
+        print(f"✅ MirroredStrategy enabled")
+    elif num_gpus == 1:
+        print("\n💻 Single GPU Training")
+        strategy = tf.distribute.get_strategy()
+    else:
+        print("\n⚠️  CPU Training (no GPU found)")
+        strategy = tf.distribute.get_strategy()
+        num_gpus = 1  # Treat CPU as 1 device for batch calculation
+    
+    total_batch_size = base_batch_size * num_gpus
+    
+    return strategy, num_gpus, total_batch_size
 
 
 def get_optimal_batch_size(image_size, gpu_memory_gb=40):
