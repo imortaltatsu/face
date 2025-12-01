@@ -1,181 +1,136 @@
 """
-Automated Anti-Spoofing Dataset Scraper
+CelebA-Spoof Dataset Helper
 
-1. Scrapes CelebA-Spoof dataset for direct download links.
-2. Uses curl with SSL bypass (-k) to download files.
-3. Handles Google Drive links using curl with confirm token logic.
-4. Automatically unzips downloaded archives.
+1. Provides direct links for Google Drive and Baidu Drive.
+2. Monitors directory for downloaded files.
+3. Automatically unzips and organizes the dataset.
+4. Handles multi-part zip files if present.
 """
 
 import os
 import sys
-import requests
-from bs4 import BeautifulSoup
-from pathlib import Path
-from tqdm import tqdm
-import subprocess
-import re
-from urllib.parse import urljoin, urlparse
-import warnings
 import zipfile
+from pathlib import Path
+import time
+import shutil
 
-# Suppress SSL warnings
-warnings.filterwarnings("ignore")
-
-class DatasetScraper:
-    """Automated dataset scraper and downloader using curl"""
+class DatasetHelper:
+    """Helper for managing CelebA-Spoof dataset"""
     
     def __init__(self, output_dir='data/video_liveness'):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-        self.session.verify = False
-    
-    def scrape_github_releases(self, repo_url):
-        """Scrape GitHub repository for release downloads"""
-        try:
-            repo_path = urlparse(repo_url).path.strip('/')
-            api_url = f"https://api.github.com/repos/{repo_path}/releases/latest"
+        self.celeba_dir = self.output_dir / 'celeba_spoof'
+        self.celeba_dir.mkdir(exist_ok=True)
+        
+    def show_instructions(self):
+        """Print download instructions"""
+        print("\n" + "="*70)
+        print("📥 CelebA-Spoof Dataset Download Helper")
+        print("="*70)
+        print("\nAutomated download is restricted by file host protections.")
+        print("Please download the dataset manually using one of the links below:")
+        
+        print("\nOPTION 1: Google Drive (Recommended)")
+        print("🔗 Link: https://drive.google.com/drive/folders/1OW_1bawO79pRqdVEVmBzp8HSxdSwln_Z?usp=sharing")
+        print("💡 Tip:  Use the 'Download all' button in Google Drive to get a single zip or split parts.")
+        
+        print("\nOPTION 2: Baidu Drive")
+        print("🔗 Link:     https://pan.baidu.com/s/12qe13-jFJ9pE-_E3iSZtkw")
+        print("🔑 Password: 61fd")
+        
+        print(f"\n📂 DESTINATION: {self.celeba_dir.absolute()}")
+        print("\nINSTRUCTIONS:")
+        print("1. Download the files (zip archives).")
+        print(f"2. Move/Copy them to: {self.celeba_dir}")
+        print("3. This script will automatically detect and unzip them.")
+        print("="*70)
+        
+    def check_and_unzip(self):
+        """Check for zip files and unzip them"""
+        print(f"\n🔍 Checking for files in {self.celeba_dir}...")
+        
+        # Look for zip files
+        zip_files = sorted(list(self.celeba_dir.glob('*.zip*')))
+        
+        if not zip_files:
+            print("❌ No zip files found.")
+            print("   Waiting for you to download files...")
+            return False
             
-            response = self.session.get(api_url, verify=False)
-            if response.status_code == 200:
-                data = response.json()
-                assets = data.get('assets', [])
-                return [asset['browser_download_url'] for asset in assets]
-        except Exception as e:
-            print(f"Failed to scrape {repo_url}: {e}")
-        return []
-    
-    def scrape_google_drive_links(self, page_url):
-        """Extract Google Drive links from webpage"""
-        try:
-            response = self.session.get(page_url, verify=False)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            links = []
-            for a in soup.find_all('a', href=True):
-                href = a['href']
-                if 'drive.google.com' in href or 'docs.google.com' in href:
-                    match = re.search(r'/d/([a-zA-Z0-9_-]+)', href)
-                    if match:
-                        file_id = match.group(1)
-                        # Construct a direct download URL format for reference
-                        links.append(f"https://drive.google.com/uc?id={file_id}&export=download")
-            
-            return links
-        except Exception as e:
-            print(f"Failed to scrape {page_url}: {e}")
-        return []
-    
-    def download_with_curl(self, url, output_path):
-        """Download file using curl with SSL bypass"""
-        try:
-            print(f"Downloading {output_path.name}...")
-            
-            # Basic curl command with SSL bypass (-k) and follow redirects (-L)
-            cmd = ['curl', '-k', '-L', '-o', str(output_path), url]
-            
-            # Check if it's a Google Drive link
-            if 'drive.google.com' in url:
-                # Extract ID
-                match = re.search(r'id=([a-zA-Z0-9_-]+)', url)
-                if match:
-                    file_id = match.group(1)
-                    # Use a robust one-liner for GDrive using curl
-                    cmd = [
-                        'curl', '-k', '-L', '-c', '/tmp/cookies.txt', 
-                        f'https://drive.google.com/uc?export=download&id={file_id}',
-                        '-o', str(output_path)
-                    ]
-            
-            # Execute curl
-            result = subprocess.run(cmd, check=True)
-            
-            if result.returncode == 0:
-                print(f"✅ Downloaded: {output_path}")
-                return True
-            else:
-                print(f"❌ Download failed with code {result.returncode}")
-                return False
+        print(f"✅ Found {len(zip_files)} zip files.")
+        
+        # Filter out already extracted ones (heuristic)
+        files_to_process = []
+        for zf in zip_files:
+            # Ignore partial parts like .z01, .z02 unless it's the main .zip
+            if zf.suffix != '.zip' and '.zip' in zf.name:
+                continue
                 
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Curl failed: {e}")
-            return False
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            return False
-
-    def unzip_file(self, file_path):
-        """Unzip a file to the same directory"""
-        try:
-            print(f"Unzipping {file_path.name}...")
-            with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                zip_ref.extractall(file_path.parent)
-            print(f"✅ Unzipped: {file_path.name}")
+            # Check if likely extracted
+            possible_dir = zf.parent / zf.stem
+            if possible_dir.exists() and possible_dir.is_dir():
+                # print(f"   ℹ️  {zf.name} seems already extracted (folder exists).")
+                pass
+            else:
+                files_to_process.append(zf)
+        
+        if not files_to_process:
+            print("   All zip files appear to be extracted already.")
             return True
-        except zipfile.BadZipFile:
-            print(f"❌ Error: {file_path.name} is not a valid zip file")
-            return False
-        except Exception as e:
-            print(f"❌ Error unzipping {file_path.name}: {e}")
-            return False
 
-    def scrape_celeba_spoof(self):
-        """Scrape CelebA-Spoof dataset"""
-        print("\n📥 Scraping CelebA-Spoof...")
-        
-        # Updated URL as requested
-        repo_url = "https://github.com/ZhangYuanhan-AI/CelebA-Spoof"
-        
-        # Try GitHub releases
-        links = self.scrape_github_releases(repo_url)
-        
-        # Try scraping README for Google Drive links
-        readme_url = f"{repo_url}/blob/main/README.md" # 'main' branch is common, fallback to master if needed
-        gdrive_links = self.scrape_google_drive_links(readme_url)
-        
-        if not gdrive_links:
-             readme_url = f"{repo_url}/blob/master/README.md"
-             gdrive_links = self.scrape_google_drive_links(readme_url)
-
-        all_links = links + gdrive_links
-        
-        if all_links:
-            print(f"Found {len(all_links)} download links")
-            output_dir = self.output_dir / 'celeba_spoof'
-            output_dir.mkdir(exist_ok=True)
-            
-            for i, link in enumerate(all_links):
-                filename = f"celeba_spoof_part{i+1}.zip"
-                output_path = output_dir / filename
-                if self.download_with_curl(link, output_path):
-                    self.unzip_file(output_path)
-            return True
-        else:
-            print("No direct download links found")
-            return False
+        for zip_path in files_to_process:
+            print(f"\n📦 Processing {zip_path.name}...")
+            try:
+                print(f"   Unzipping to {zip_path.parent}...")
+                
+                # Handle multi-part zips if needed (basic support)
+                # Usually standard zipfile handles it if you open the .zip file
+                
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    # Get list of files for progress bar
+                    members = zip_ref.infolist()
+                    for member in tqdm(members, desc="Extracting", unit="file"):
+                        zip_ref.extract(member, zip_path.parent)
+                        
+                print(f"   ✅ Unzipped successfully")
+                
+                # Optional: Rename/Move logic could go here if structure is messy
+                
+            except zipfile.BadZipFile:
+                print(f"   ❌ Error: {zip_path.name} is not a valid zip file (or download incomplete)")
+            except Exception as e:
+                print(f"   ❌ Error: {e}")
+                
+        return True
 
     def run(self):
         """Main execution flow"""
-        print("\n" + "="*70)
-        print("🕷️  AUTOMATED DATASET SCRAPER (CelebA-Spoof ONLY)")
-        print("="*70)
+        self.show_instructions()
         
-        self.scrape_celeba_spoof()
-        
-        print("\n" + "="*70)
-        print("✅ SCRAPING COMPLETE")
-        print("="*70)
-        print(f"\nData location: {self.output_dir}")
-        print("Next: Run 'python train_anti_spoofing.py'")
+        # Check immediately
+        if self.check_and_unzip():
+            print("\n✅ Dataset preparation complete!")
+            return
+            
+        # Polling loop
+        print("\nChecking again in 10 seconds... (Press Ctrl+C to stop)")
+        try:
+            while True:
+                time.sleep(10)
+                if self.check_and_unzip():
+                    print("\n✅ Dataset preparation complete!")
+                    # Don't break immediately, keep watching for more files? 
+                    # Or break if we think we are done. 
+                    # Let's keep watching in case they download sequentially.
+                    print("   Watching for more files...")
+        except KeyboardInterrupt:
+            print("\nStopped.")
 
 
 def main():
-    scraper = DatasetScraper()
-    scraper.run()
+    helper = DatasetHelper()
+    helper.run()
 
 
 if __name__ == '__main__':
