@@ -155,14 +155,21 @@ class LivenessDetector:
             
             print(f"   Laplacian variance: {laplacian_var:.2f}")
             
-            # Combine ML prediction with variance check
-            # Webcam: 50-200, Photos: >200
-            if laplacian_var > 250:
-                liveness_score *= 0.7  # Penalize too-sharp images
+            # Modern webcams can produce sharp images (variance 200-600)
+            # Only penalize if EXTREMELY sharp (likely scanned photo) or too blurry
+            if laplacian_var > 800:  # Increased from 250 - scanned photos
+                liveness_score *= 0.8  # Reduced penalty
                 print(f"   Applied sharp penalty: {liveness_score}")
-            elif laplacian_var < 40:
-                liveness_score *= 0.8  # Penalize too-blurry images
+            elif laplacian_var < 30:  # Reduced from 40 - very blurry
+                liveness_score *= 0.9  # Reduced penalty
                 print(f"   Applied blur penalty: {liveness_score}")
+            else:
+                # Good range for modern webcams (30-800)
+                # Boost score slightly if in optimal range
+                if 100 <= laplacian_var <= 600:
+                    liveness_score *= 1.2  # Boost for typical webcam range
+                    liveness_score = min(liveness_score, 1.0)  # Cap at 1.0
+                    print(f"   Boosted webcam score: {liveness_score}")
             
             threshold = config.LIVENESS_THRESHOLD
             is_live = liveness_score >= threshold
