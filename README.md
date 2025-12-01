@@ -137,18 +137,18 @@ Automatically detects and uses all available GPUs:
 
 ```bash
 # Register user
-curl -X POST http://localhost:8000/register \
+curl -X POST http://localhost:9834/register \
   -F "user_id=user123" \
   -F "name=John Doe" \
   -F "image=@face.jpg"
 
 # Verify user
-curl -X POST http://localhost:8000/verify \
+curl -X POST http://localhost:9834/verify \
   -F "user_id=user123" \
   -F "image=@face.jpg"
 
 # Identify user
-curl -X POST http://localhost:8000/identify \
+curl -X POST http://localhost:9834/identify \
   -F "image=@face.jpg"
 ```
 
@@ -156,13 +156,13 @@ curl -X POST http://localhost:8000/identify \
 
 ```bash
 # Register with video
-curl -X POST http://localhost:8000/register_video \
+curl -X POST http://localhost:9834/register_video \
   -F "user_id=user123" \
   -F "name=John Doe" \
   -F "video=@face_video.mp4"
 
 # Verify with video
-curl -X POST http://localhost:8000/verify_video \
+curl -X POST http://localhost:9834/verify_video \
   -F "user_id=user123" \
   -F "video=@face_video.mp4"
 ```

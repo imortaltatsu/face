@@ -15,7 +15,7 @@ uv run python main.py
 python main.py
 ```
 
-The server will start at `http://localhost:8000`
+The server will start at `http://localhost:9834`
 
 ### 2. Open the Test App
 
@@ -57,12 +57,12 @@ Open `test_app.html` in your browser (Chrome/Firefox recommended for camera acce
 
 ### Health Check
 ```bash
-curl http://localhost:8000/
+curl http://localhost:9834/
 ```
 
 ### Register User
 ```bash
-curl -X POST "http://localhost:8000/register" \
+curl -X POST "http://localhost:9834/register" \
   -F "user_id=user123" \
   -F "name=John Doe" \
   -F "image=@face.jpg"
@@ -70,36 +70,36 @@ curl -X POST "http://localhost:8000/register" \
 
 ### Verify User
 ```bash
-curl -X POST "http://localhost:8000/verify" \
+curl -X POST "http://localhost:9834/verify" \
   -F "user_id=user123" \
   -F "image=@face.jpg"
 ```
 
 ### Identify User
 ```bash
-curl -X POST "http://localhost:8000/identify" \
+curl -X POST "http://localhost:9834/identify" \
   -F "image=@face.jpg"
 ```
 
 ### List Users
 ```bash
-curl http://localhost:8000/users
+curl http://localhost:9834/users
 ```
 
 ### Get User Details
 ```bash
-curl http://localhost:8000/users/user123
+curl http://localhost:9834/users/user123
 ```
 
 ### Add Face to Profile (Enriched Embeddings)
 ```bash
-curl -X POST "http://localhost:8000/add-face/user123" \
+curl -X POST "http://localhost:9834/add-face/user123" \
   -F "image=@face2.jpg"
 ```
 
 ### Compare Two Faces
 ```bash
-curl -X POST "http://localhost:8000/compare" \
+curl -X POST "http://localhost:9834/compare" \
   -F "image1=@face1.jpg" \
   -F "image2=@face2.jpg"
 ```

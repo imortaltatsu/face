@@ -535,7 +535,7 @@ def main():
     print("  ✓ Enriched embeddings via vector addition")
     print("  ✓ FaceNet embeddings (512-dim)")
     print("  ✓ Models preloaded at startup")
-    print("\nAPI Documentation: http://localhost:8000/docs")
+    print("\nAPI Documentation: http://localhost:9834/docs")
     print("=" * 60)
     
     uvicorn.run(
