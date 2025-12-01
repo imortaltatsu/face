@@ -185,7 +185,7 @@ async def register_user(
             )
         
         # Extract embedding
-        embedding = m.extract_embedding(face)
+        embedding = m.get_embedding(face)
         
         # Create profile
         profile = db.create_profile(user_id, name, embedding)
@@ -244,7 +244,7 @@ async def verify_user(
         is_live, liveness_score, reason = liveness.detect_liveness(img_array, detection)
         
         # Extract embedding
-        embedding = m.extract_embedding(face)
+        embedding = m.get_embedding(face)
         
         # Verify against user's embedding
         user_embedding = profile.get_embedding()
@@ -296,7 +296,7 @@ async def identify_user(image: UploadFile = File(...)):
         is_live, liveness_score, reason = liveness.detect_liveness(img_array, detection)
         
         # Extract embedding
-        embedding = m.extract_embedding(face)
+        embedding = m.get_embedding(face)
         
         # Identify from database
         all_embeddings = db.get_all_embeddings()
@@ -379,7 +379,7 @@ async def add_face_to_profile(user_id: str, image: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=f"Liveness check failed: {reason}")
         
         # Extract embedding
-        embedding = m.extract_embedding(face)
+        embedding = m.get_embedding(face)
         
         # Update profile (will create enriched embedding automatically)
         db.update_profile(user_id, embedding)
@@ -493,8 +493,8 @@ async def compare_faces(
         live2, score2, reason2 = liveness.detect_liveness(img2, det2)
         
         # Extract embeddings
-        emb1 = m.extract_embedding(face1)
-        emb2 = m.extract_embedding(face2)
+        emb1 = m.get_embedding(face1)
+        emb2 = m.get_embedding(face2)
         
         # Compare
         is_match, similarity = verify_faces(emb1, emb2)
