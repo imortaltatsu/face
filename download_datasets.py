@@ -4,6 +4,7 @@ Automated Anti-Spoofing Dataset Scraper
 1. Scrapes dataset websites for direct download links.
 2. Uses curl with SSL bypass (-k) to download files.
 3. Handles Google Drive links using curl with confirm token logic.
+4. Automatically unzips downloaded archives.
 """
 
 import os
@@ -16,6 +17,7 @@ import subprocess
 import re
 from urllib.parse import urljoin, urlparse
 import warnings
+import zipfile
 
 # Suppress SSL warnings
 warnings.filterwarnings("ignore")
@@ -82,20 +84,7 @@ class DatasetScraper:
                 match = re.search(r'id=([a-zA-Z0-9_-]+)', url)
                 if match:
                     file_id = match.group(1)
-                    # For large files on GDrive, we need to handle the warning confirmation
-                    # This is a bit complex with pure curl, but we can try a standard approach
-                    # or just use the direct link and hope it's small enough or curl handles it
-                    
-                    # Alternative: Use a specific GDrive download command pattern
-                    # curl -k -L -c cookies.txt 'https://docs.google.com/uc?export=download&id=FILEID' > /dev/null
-                    # curl -k -L -b cookies.txt -o FILENAME 'https://docs.google.com/uc?export=download&confirm=...(extracted)...&id=FILEID'
-                    
-                    # For simplicity, let's try the direct approach first. 
-                    # If the user has 'gdown', we could use that with --no-check-certificate if supported,
-                    # but they asked for curl.
-                    
-                    # Let's try a robust one-liner for GDrive using curl
-                    # This attempts to get the confirm token
+                    # Use a robust one-liner for GDrive using curl
                     cmd = [
                         'curl', '-k', '-L', '-c', '/tmp/cookies.txt', 
                         f'https://drive.google.com/uc?export=download&id={file_id}',
@@ -117,6 +106,21 @@ class DatasetScraper:
             return False
         except Exception as e:
             print(f"❌ Error: {e}")
+            return False
+
+    def unzip_file(self, file_path):
+        """Unzip a file to the same directory"""
+        try:
+            print(f"Unzipping {file_path.name}...")
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                zip_ref.extractall(file_path.parent)
+            print(f"✅ Unzipped: {file_path.name}")
+            return True
+        except zipfile.BadZipFile:
+            print(f"❌ Error: {file_path.name} is not a valid zip file")
+            return False
+        except Exception as e:
+            print(f"❌ Error unzipping {file_path.name}: {e}")
             return False
 
     def scrape_celeba_spoof(self):
@@ -142,7 +146,8 @@ class DatasetScraper:
             for i, link in enumerate(all_links):
                 filename = f"celeba_spoof_part{i+1}.zip"
                 output_path = output_dir / filename
-                self.download_with_curl(link, output_path)
+                if self.download_with_curl(link, output_path):
+                    self.unzip_file(output_path)
             return True
         else:
             print("No direct download links found")
@@ -163,7 +168,8 @@ class DatasetScraper:
             for i, link in enumerate(gdrive_links):
                 filename = f"oulu_npu_part{i+1}.zip"
                 output_path = output_dir / filename
-                self.download_with_curl(link, output_path)
+                if self.download_with_curl(link, output_path):
+                    self.unzip_file(output_path)
             return True
         else:
             print("No links found")
@@ -172,7 +178,7 @@ class DatasetScraper:
     def run(self):
         """Main execution flow"""
         print("\n" + "="*70)
-        print("🕷️  AUTOMATED DATASET SCRAPER (CURL + SSL BYPASS)")
+        print("🕷️  AUTOMATED DATASET SCRAPER (CURL + SSL BYPASS + UNZIP)")
         print("="*70)
         
         self.scrape_celeba_spoof()
