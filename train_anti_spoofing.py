@@ -109,55 +109,164 @@ class VideoDataGenerator:
         self.image_size = image_size
         self.batch_size = batch_size
         
-        # Scan for videos
-        self.real_videos = list((self.data_dir / 'real').glob('**/*.mp4'))
-        self.spoof_videos = list((self.data_dir / 'spoof').glob('**/*.mp4'))
+        # Scan for "video" folders (folders containing PNGs)
+        # Structure: Data/train/ID/live/*.png
+        # We assume any folder with 'live' or 'spoof' in name containing pngs is a sequence
+        print("Scanning for image sequences...")
         
-        print(f"Found {len(self.real_videos)} real videos")
-        print(f"Found {len(self.spoof_videos)} spoof videos")
+        # Find all pngs first, then group by parent folder
+        # This might be slow on large dataset, but robust
+        # Faster approach: Look for ID folders then subfolders
+        
+        self.real_videos = []
+        self.spoof_videos = []
+        
+        # We look for the 'Data' folder which contains 'train' and 'test'
+        # Adjust path if needed based on extraction
+        search_path = self.data_dir / 'CelebA_Spoof' / 'Data'
+        if not search_path.exists():
+            # Fallback to direct data_dir if user pointed directly to Data
+            search_path = self.data_dir
+            
+        print(f"Searching in: {search_path}")
+        
+        # Walk through directories to find 'live' and 'spoof' folders
+        for root, dirs, files in os.walk(search_path):
+            if 'live' in os.path.basename(root):
+                # Check if contains pngs
+                if any(f.endswith('.png') for f in files):
+                    self.real_videos.append(Path(root))
+            elif 'spoof' in os.path.basename(root):
+                if any(f.endswith('.png') for f in files):
+                    self.spoof_videos.append(Path(root))
+        
+        print(f"Found {len(self.real_videos)} real sequences")
+        print(f"Found {len(self.spoof_videos)} spoof sequences")
     
-    def extract_frames(self, video_path, num_frames=30):
-        """Extract frames from video"""
-        cap = cv2.VideoCapture(str(video_path))
+    def crop_face_from_bb(self, image, bb_path):
+        """
+        Crop face using bounding box from _BB.txt
+        
+        BB Format:
+        bbox = [x, y, w, h, score] (scaled to 224x224)
+        """
+        if not os.path.exists(bb_path):
+            return cv2.resize(image, (self.image_size, self.image_size))
+            
+        try:
+            with open(bb_path, 'r') as f:
+                content = f.read().strip()
+                # Parse content to find bbox line
+                # Example: "bbox = [61 45 61 112 0.9970805]"
+                # Or just the numbers if simplified. 
+                # Based on user desc, it seems to be text file with "bbox = [...]"
+                
+                import re
+                match = re.search(r'bbox\s*=\s*\[([\d\s\.]+)\]', content)
+                if match:
+                    vals = [float(x) for x in match.group(1).split()]
+                else:
+                    # Try parsing just numbers if format varies
+                    vals = [float(x) for x in content.split() if x.replace('.','',1).isdigit()]
+                
+                if len(vals) < 4:
+                    return cv2.resize(image, (self.image_size, self.image_size))
+                
+                x_224, y_224, w_224, h_224 = vals[:4]
+                
+                # Real image dims
+                real_h, real_w = image.shape[:2]
+                
+                # Scale coordinates
+                x1 = int(x_224 * (real_w / 224.0))
+                y1 = int(y_224 * (real_h / 224.0))
+                w1 = int(w_224 * (real_w / 224.0))
+                h1 = int(h_224 * (real_h / 224.0))
+                
+                # Clip to image bounds
+                x1 = max(0, x1)
+                y1 = max(0, y1)
+                w1 = min(real_w, w1)
+                h1 = min(real_h, h1)
+                
+                # Ensure valid crop
+                if w1 <= 0 or h1 <= 0:
+                    return cv2.resize(image, (self.image_size, self.image_size))
+                
+                face = image[y1:y1+h1, x1:x1+w1]
+                
+                # Resize to model input
+                face = cv2.resize(face, (self.image_size, self.image_size))
+                return face
+                
+        except Exception as e:
+            # print(f"Error cropping {bb_path}: {e}")
+            return cv2.resize(image, (self.image_size, self.image_size))
+
+    def extract_frames(self, sequence_path, num_frames=30):
+        """Extract frames from a folder of PNGs"""
+        sequence_path = Path(sequence_path)
+        
+        # Get all PNGs
+        png_files = sorted(list(sequence_path.glob('*.png')))
+        
+        if len(png_files) < num_frames:
+            # If not enough frames, loop or pad? 
+            # For now, skip if too few, or duplicate
+            if len(png_files) == 0:
+                return None
+            # Simple resampling/duplication if needed, or just take what we have and loop
+            indices = np.linspace(0, len(png_files) - 1, num_frames, dtype=int)
+        else:
+            # Sample uniformly
+            indices = np.linspace(0, len(png_files) - 1, num_frames, dtype=int)
+            
         frames = []
-        
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if total_frames < num_frames:
-            cap.release()
-            return None
-        
-        # Sample frames uniformly
-        indices = np.linspace(0, total_frames - 1, num_frames, dtype=int)
-        
         for idx in indices:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-            ret, frame = cap.read()
-            if ret:
-                # Resize and normalize
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame = cv2.resize(frame, (self.image_size, self.image_size))
-                frame = frame.astype(np.float32) / 255.0
-                frames.append(frame)
+            img_path = png_files[idx]
+            bb_path = str(img_path).replace('.png', '_BB.txt')
+            
+            # Read image
+            frame = cv2.imread(str(img_path))
+            if frame is None:
+                continue
+                
+            # Convert BGR to RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Crop using BB
+            frame = self.crop_face_from_bb(frame, bb_path)
+            
+            # Normalize
+            frame = frame.astype(np.float32) / 255.0
+            frames.append(frame)
         
-        cap.release()
-        
-        if len(frames) == num_frames:
-            return np.array(frames)
-        return None
-    
+        if len(frames) == 0:
+            return None
+            
+        # Pad if necessary (shouldn't be if we used indices correctly, unless read failed)
+        while len(frames) < num_frames:
+            frames.append(frames[-1])
+            
+        return np.array(frames)
+
     def create_dataset(self, validation_split=0.2):
-        """Create tf.data.Dataset for training"""
-        # Combine and shuffle
-        all_videos = [(v, 1) for v in self.real_videos] + [(v, 0) for v in self.spoof_videos]
+        """Create tf.data.Dataset for training with parallel loading"""
+        # Combine and shuffle paths first
+        all_videos = [(str(v), 1) for v in self.real_videos] + [(str(v), 0) for v in self.spoof_videos]
         np.random.shuffle(all_videos)
+        
+        if not all_videos:
+            print("❌ No sequences found! Check dataset path.")
+            return None, None
         
         # Split train/val
         split_idx = int(len(all_videos) * (1 - validation_split))
         train_videos = all_videos[:split_idx]
         val_videos = all_videos[split_idx:]
         
-        print(f"Training videos: {len(train_videos)}")
-        print(f"Validation videos: {len(val_videos)}")
+        print(f"Training sequences: {len(train_videos)}")
+        print(f"Validation sequences: {len(val_videos)}")
         
         # Create datasets
         train_dataset = self._create_tf_dataset(train_videos, is_training=True)
@@ -165,24 +274,52 @@ class VideoDataGenerator:
         
         return train_dataset, val_dataset
     
-    def _create_tf_dataset(self, video_list, is_training=True):
-        """Create tf.data.Dataset from video list"""
-        def generator():
-            for video_path, label in video_list:
-                frames = self.extract_frames(video_path, self.sequence_length)
-                if frames is not None:
-                    yield frames, label
+    def _load_video_wrapper(self, video_path, label):
+        """Wrapper for py_function to handle numpy/tensor conversion"""
+        # video_path is a byte tensor from tf.data
+        video_path_str = video_path.numpy().decode('utf-8')
         
-        dataset = tf.data.Dataset.from_generator(
-            generator,
-            output_signature=(
-                tf.TensorSpec(shape=(self.sequence_length, self.image_size, self.image_size, 3), dtype=tf.float32),
-                tf.TensorSpec(shape=(), dtype=tf.int32)
-            )
-        )
+        frames = self.extract_frames(video_path_str, self.sequence_length)
+        
+        if frames is None:
+            frames = np.zeros((self.sequence_length, self.image_size, self.image_size, 3), dtype=np.float32)
+            
+        return frames, np.int32(label)
+
+    def _create_tf_dataset(self, video_list, is_training=True):
+        """Create optimized tf.data.Dataset"""
+        if not video_list:
+            return None
+            
+        # Unzip to separate lists
+        video_paths, labels = zip(*video_list)
+        
+        # Create dataset from file paths (lightweight)
+        dataset = tf.data.Dataset.from_tensor_slices((list(video_paths), list(labels)))
         
         if is_training:
-            dataset = dataset.shuffle(buffer_size=100)
+            # Shuffle paths *before* loading heavy data
+            dataset = dataset.shuffle(buffer_size=len(video_paths))
+        
+        # Parallel mapping to load videos
+        dataset = dataset.map(
+            lambda path, label: tf.py_function(
+                self._load_video_wrapper, 
+                inp=[path, label], 
+                Tout=[tf.float32, tf.int32]
+            ),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+        
+        # Explicitly set shapes
+        def set_shapes(frames, label):
+            frames.set_shape((self.sequence_length, self.image_size, self.image_size, 3))
+            label.set_shape([])
+            return frames, label
+            
+        dataset = dataset.map(set_shapes, num_parallel_calls=tf.data.AUTOTUNE)
+        
+        if is_training:
             dataset = dataset.repeat()
         
         dataset = dataset.batch(self.batch_size)
