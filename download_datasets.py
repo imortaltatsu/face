@@ -67,7 +67,7 @@ class DatasetDownloader:
             '1ychf3AazgFb73Z1LIJ_lLhQwvYnOBCXd', '1z7c31kyQdrFxbpT6ZblIwAKRnJ9c2MTf'
         ]
         
-    def download_files(self):
+    def download_files(self, proxy=None):
         """Download files individually using gdown"""
         import gdown
         
@@ -76,6 +76,8 @@ class DatasetDownloader:
         print("="*70)
         print(f"Target Directory: {self.celeba_dir}")
         print(f"Total Files: {len(self.file_ids)}")
+        if proxy:
+            print(f"🌐 Using Proxy: {proxy}")
         
         success_count = 0
         
@@ -95,7 +97,7 @@ class DatasetDownloader:
             try:
                 # Use gdown to download
                 # verify=False to bypass SSL errors if any
-                output_path = gdown.download(url, output=str(expected_path), quiet=False, verify=False)
+                output_path = gdown.download(url, output=str(expected_path), quiet=False, verify=False, proxy=proxy)
                 
                 if output_path:
                     # gdown with output arg returns the path
@@ -173,22 +175,29 @@ class DatasetDownloader:
                 except Exception as e:
                     print(f"   ❌ Error: {e}")
 
-    def run(self):
+    def run(self, proxy=None):
         """Main execution flow"""
         install_gdown()
         
-        if self.download_files():
+        if self.download_files(proxy=proxy):
             self.unzip_files()
             print("\n" + "="*70)
             print("✅ DATASET PREPARATION COMPLETE")
             print("="*70)
         else:
-            print("\n❌ Dataset preparation failed.")
+            print("\n❌ Dataset preparation failed (or partial).")
+            # Attempt unzip even if partial, as we have repair logic now
+            self.unzip_files()
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='Download CelebA-Spoof Dataset')
+    parser.add_argument('--proxy', type=str, help='Proxy URL (e.g., http://user:pass@host:port)')
+    args = parser.parse_args()
+
     downloader = DatasetDownloader()
-    downloader.run()
+    downloader.run(proxy=args.proxy)
 
 
 if __name__ == '__main__':
