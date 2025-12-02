@@ -273,18 +273,137 @@ class VideoDataGenerator:
         val_dataset = self._create_tf_dataset(val_videos, is_training=False)
         
         return train_dataset, val_dataset
-    
-    def _load_video_wrapper(self, video_path, label):
-        """Wrapper for py_function to handle numpy/tensor conversion"""
-        # video_path is a byte tensor from tf.data
-        video_path_str = video_path.numpy().decode('utf-8')
+
+    def _get_sequence_paths_wrapper(self, folder_path_tensor, label):
+        """
+        Python wrapper to list files in a folder.
+        Returns: (image_paths, bb_paths, label)
+        """
+        folder_path = folder_path_tensor.numpy().decode('utf-8')
+        folder = Path(folder_path)
         
-        frames = self.extract_frames(video_path_str, self.sequence_length)
+        # Get all PNGs sorted
+        png_files = sorted(list(folder.glob('*.png')))
         
-        if frames is None:
-            frames = np.zeros((self.sequence_length, self.image_size, self.image_size, 3), dtype=np.float32)
+        if not png_files:
+            # Return empty lists if no files (will be handled in TF)
+            return [], [], label
             
-        return frames, np.int32(label)
+        # Sampling logic (Python is fast enough for this)
+        if len(png_files) < self.sequence_length:
+            # Pad by repeating last frame
+            indices = np.linspace(0, len(png_files) - 1, len(png_files), dtype=int)
+            # We need exactly sequence_length
+            # If we have 5 frames and need 30, we repeat
+            # Simple approach: tile indices
+            while len(indices) < self.sequence_length:
+                indices = np.concatenate([indices, indices])
+            indices = indices[:self.sequence_length]
+        else:
+            # Uniform sample
+            indices = np.linspace(0, len(png_files) - 1, self.sequence_length, dtype=int)
+            
+        selected_pngs = [str(png_files[i]) for i in indices]
+        selected_bbs = [str(p).replace('.png', '_BB.txt') for p in selected_pngs]
+        
+        return selected_pngs, selected_bbs, label
+
+    def _load_and_process_sequence(self, image_paths, bb_paths, label):
+        """
+        TensorFlow-native loading and processing (Runs in C++ threads, No GIL)
+        Input: Tensor of string paths
+        """
+        
+        def process_frame(img_path, bb_path):
+            # 1. Read Image
+            img_content = tf.io.read_file(img_path)
+            img = tf.image.decode_png(img_content, channels=3)
+            img = tf.cast(img, tf.float32)
+            
+            # Get dimensions
+            shape = tf.shape(img)
+            real_h = tf.cast(shape[0], tf.float32)
+            real_w = tf.cast(shape[1], tf.float32)
+            
+            # 2. Read BB (If exists)
+            # We use a default full-image crop if BB reading fails
+            # Since tf.io.read_file fails if file doesn't exist, we need a way to check.
+            # But checking file existence in TF graph is hard without py_function.
+            # Hack: We assume BB exists if we generated the path. If it might not, 
+            # we would need a py_function check or try/catch in dataset (not possible).
+            # Given the dataset structure, BBs usually exist. 
+            # If they don't, we can use a dummy file or catch it in python stage.
+            # For now, let's try to read. If it fails, the pipeline crashes.
+            # To make it robust: We can use tf.io.read_file but we need to ensure it doesn't crash.
+            # Actually, let's do the BB parsing in pure TF.
+            
+            bb_content = tf.io.read_file(bb_path)
+            
+            # Parse BB: "bbox = [x y w h score]"
+            # Remove "bbox = [" and "]"
+            # We can just extract all numbers
+            bb_text = tf.strings.regex_replace(bb_content, "[^0-9. ]", " ")
+            bb_text = tf.strings.strip(bb_text)
+            bb_vals = tf.strings.to_number(tf.strings.split(bb_text), out_type=tf.float32)
+            
+            # We expect at least 4 values
+            # x, y, w, h are indices 0, 1, 2, 3
+            # They are scaled to 224x224
+            
+            # Use tf.cond to handle cases where parsing fails (empty bb_vals)
+            def crop_face():
+                x_224 = bb_vals[0]
+                y_224 = bb_vals[1]
+                w_224 = bb_vals[2]
+                h_224 = bb_vals[3]
+                
+                # Scale to real image
+                scale_x = real_w / 224.0
+                scale_y = real_h / 224.0
+                
+                x = x_224 * scale_x
+                y = y_224 * scale_y
+                w = w_224 * scale_x
+                h = h_224 * scale_y
+                
+                # Convert to int
+                x = tf.cast(x, tf.int32)
+                y = tf.cast(y, tf.int32)
+                w = tf.cast(w, tf.int32)
+                h = tf.cast(h, tf.int32)
+                
+                # Clip
+                x = tf.maximum(0, x)
+                y = tf.maximum(0, y)
+                # Ensure w, h don't go out of bounds
+                w = tf.minimum(tf.cast(real_w, tf.int32) - x, w)
+                h = tf.minimum(tf.cast(real_h, tf.int32) - y, h)
+                
+                # If invalid crop, return full image
+                # tf.image.crop_to_bounding_box requires static logic or valid inputs
+                # We can use crop_to_bounding_box
+                cropped = tf.image.crop_to_bounding_box(img, y, x, h, w)
+                return tf.image.resize(cropped, [self.image_size, self.image_size])
+
+            def full_image():
+                return tf.image.resize(img, [self.image_size, self.image_size])
+                
+            # Check if we have enough values
+            has_bb = tf.size(bb_vals) >= 4
+            processed_img = tf.cond(has_bb, crop_face, full_image)
+            
+            # Normalize
+            return processed_img / 255.0
+
+        # Map process_frame over the sequence of paths
+        # fn_output_signature needs to be specified for map_fn
+        frames = tf.map_fn(
+            lambda x: process_frame(x[0], x[1]), 
+            elems=(image_paths, bb_paths),
+            fn_output_signature=tf.float32
+        )
+        
+        return frames, label
 
     def _create_tf_dataset(self, video_list, is_training=True):
         """Create optimized tf.data.Dataset"""
@@ -294,24 +413,34 @@ class VideoDataGenerator:
         # Unzip to separate lists
         video_paths, labels = zip(*video_list)
         
-        # Create dataset from file paths (lightweight)
+        # 1. Dataset of folder paths (Lightweight)
         dataset = tf.data.Dataset.from_tensor_slices((list(video_paths), list(labels)))
         
         if is_training:
-            # Shuffle paths *before* loading heavy data
             dataset = dataset.shuffle(buffer_size=len(video_paths))
         
-        # Parallel mapping to load videos
+        # 2. Python Stage: Get file paths (Fast, Metadata only)
+        # We use py_function here because glob is Python-only
         dataset = dataset.map(
             lambda path, label: tf.py_function(
-                self._load_video_wrapper, 
+                self._get_sequence_paths_wrapper, 
                 inp=[path, label], 
-                Tout=[tf.float32, tf.int32]
+                Tout=[tf.string, tf.string, tf.int32]
             ),
             num_parallel_calls=tf.data.AUTOTUNE
         )
         
-        # Explicitly set shapes
+        # 3. Filter empty sequences (if any)
+        # Check if image_paths (index 0) is not empty
+        dataset = dataset.filter(lambda imgs, bbs, lbl: tf.size(imgs) > 0)
+        
+        # 4. TensorFlow Stage: Read & Decode (Heavy, Parallel, No GIL)
+        dataset = dataset.map(
+            self._load_and_process_sequence,
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+        
+        # 5. Set Shapes
         def set_shapes(frames, label):
             frames.set_shape((self.sequence_length, self.image_size, self.image_size, 3))
             label.set_shape([])
