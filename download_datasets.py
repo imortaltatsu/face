@@ -68,7 +68,7 @@ class DatasetDownloader:
         ]
         
     def download_files(self, proxy=None):
-        """Download files individually using gdown"""
+        """Download files individually using gdown with proxy rotation"""
         import gdown
         
         print("\n" + "="*70)
@@ -76,8 +76,23 @@ class DatasetDownloader:
         print("="*70)
         print(f"Target Directory: {self.celeba_dir}")
         print(f"Total Files: {len(self.file_ids)}")
+        
+        # Proxies to use (User provided + CLI argument)
+        proxies = []
         if proxy:
-            print(f"🌐 Using Proxy: {proxy}")
+            proxies.append(proxy)
+        
+        # Add hardcoded proxies from user
+        proxies.extend([
+            "http://84.17.47.150:9002",
+            "http://84.17.47.149:9002"
+        ])
+        
+        # Ensure we have unique proxies
+        proxies = list(set(proxies))
+        
+        if proxies:
+            print(f"🌐 Loaded {len(proxies)} proxies for rotation.")
         
         success_count = 0
         
@@ -94,20 +109,35 @@ class DatasetDownloader:
             print(f"\n[{i+1}/{len(self.file_ids)}] Downloading file ID: {file_id}...")
             url = f'https://drive.google.com/uc?id={file_id}'
             
-            try:
-                # Use gdown to download
-                # verify=False to bypass SSL errors if any
-                output_path = gdown.download(url, output=str(expected_path), quiet=False, verify=False, proxy=proxy)
+            # Try direct download first, then proxies
+            download_attempts = [None] + proxies
+            file_downloaded = False
+            
+            for attempt_idx, current_proxy in enumerate(download_attempts):
+                proxy_msg = f"via Proxy: {current_proxy}" if current_proxy else "Direct"
+                if attempt_idx > 0:
+                    print(f"   Retrying {proxy_msg}...")
                 
-                if output_path:
-                    # gdown with output arg returns the path
-                    success_count += 1
-                else:
-                    print("   ❌ Download failed (no output path)")
+                try:
+                    # Use gdown to download
+                    # verify=False to bypass SSL errors if any
+                    output_path = gdown.download(url, output=str(expected_path), quiet=False, verify=False, proxy=current_proxy)
                     
-            except Exception as e:
-                print(f"   ❌ Error downloading {file_id}: {e}")
-                print("      (You may need to wait 24h if this is a quota error)")
+                    if output_path:
+                        # gdown with output arg returns the path
+                        file_downloaded = True
+                        success_count += 1
+                        break # Success, move to next file
+                    else:
+                        print(f"   ❌ Download failed {proxy_msg} (no output path)")
+                        
+                except Exception as e:
+                    print(f"   ❌ Error {proxy_msg}: {e}")
+                    # Continue to next proxy
+            
+            if not file_downloaded:
+                print(f"   ❌ Failed to download {file_id} after trying all options.")
+                print("      (You may need to wait 24h if this is a quota error on all IPs)")
                 
         print(f"\n✅ Downloaded/Found {success_count}/{len(self.file_ids)} files.")
         return success_count == len(self.file_ids) # Only return True if ALL files are present
