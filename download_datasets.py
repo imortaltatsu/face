@@ -1,8 +1,9 @@
 """
-CelebA-Spoof Dataset Downloader (using gdown)
+CelebA-Spoof Dataset Downloader (ID-based)
 
 1. Automatically installs gdown if missing.
-2. Downloads the full CelebA-Spoof dataset folder from Google Drive.
+2. Downloads CelebA-Spoof dataset files using specific Google Drive File IDs.
+   (Bypasses folder download limits)
 3. Automatically unzips downloaded archives.
 """
 
@@ -28,44 +29,86 @@ def install_gdown():
             sys.exit(1)
 
 class DatasetDownloader:
-    """Automated dataset downloader using gdown"""
+    """Automated dataset downloader using gdown with specific File IDs"""
     
     def __init__(self, output_dir='data/video_liveness'):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.celeba_dir = self.output_dir / 'celeba_spoof'
-        # gdown downloads into the folder, so we point to the parent
         self.celeba_dir.mkdir(exist_ok=True)
         
-    def download_celeba_spoof(self):
-        """Download CelebA-Spoof using gdown folder download"""
+        # File IDs found from community resources (GitHub Gist)
+        # These correspond to the split zip files of the dataset
+        self.file_ids = [
+            '1gd0M4qpxzqrnOkCl7hv7vnCWV4JJTFwM',
+            '1OsOiow42GS4wbE7o1csPA2HtKLSgXT5_',
+            '1_07Q7VA4-4R5fvHpkyoorhD5igeathko',
+            '1Oy-5J10hsrZ2gyHH9U2oet0F92oaEqSq',
+            '1NxlMSgvJSlDJMRFIfq_cT_RRybYS8eNW',
+            '1mpMTb5ODq-9NV4IEVFwEDhUbYSNfVQtC',
+            '14d1TYmcVXg1TlmuywM0HgOKcPqa71Rmq',
+            '1st5Yh8yRQGAmI02iueWPm2rrJN1TpOlC',
+            '1K-6UwtmUvrW7sZqaUvGYIkqpPC1G3K1V',
+            '1wNgEJSBlZuQKePCTbwLM_9jBuIg3Hj1f',
+            '18qd2y1fBPiqQqgSM-vrQq2rMbXeSHWLy',
+            '1HgwT6-NLplcBkowdSHQz5VZEGEsFFDRd',
+            '1-UYx3LoCloTNchmSq5otd4GxkWVTEGs_',
+            '1MiHlWChmvOy53eTyiwWvd6hRV8zSeEYJ',
+            '1WqikxT7XCMZLaPaYfOo0gYZOxeqAiFcP',
+            '1iswrU0QuYSbzwKk0g0TWDD52hbtOps21',
+            '1JPAB1jjLVdn8BBJk4hydDZq-IV5czrGq'
+        ]
+        
+    def download_files(self):
+        """Download files individually using gdown"""
         import gdown
         
-        url = "https://drive.google.com/drive/folders/1OW_1bawO79pRqdVEVmBzp8HSxdSwln_Z?usp=sharing"
         print("\n" + "="*70)
-        print("📥 Downloading CelebA-Spoof Dataset via gdown...")
+        print("📥 Downloading CelebA-Spoof Dataset Parts...")
         print("="*70)
-        print(f"URL: {url}")
-        print(f"Output: {self.celeba_dir}")
+        print(f"Target Directory: {self.celeba_dir}")
+        print(f"Total Files: {len(self.file_ids)}")
         
-        try:
-            # Download the folder
-            # --folder flag equivalent
-            gdown.download_folder(url, output=str(self.celeba_dir), quiet=False, use_cookies=False)
-            print("\n✅ Download complete.")
-            return True
-        except Exception as e:
-            print(f"\n❌ gdown failed: {e}")
-            print("Possible reasons:")
-            print("1. Google Drive rate limits (try again later)")
-            print("2. Network issues")
-            return False
+        success_count = 0
+        
+        for i, file_id in enumerate(self.file_ids):
+            print(f"\n[{i+1}/{len(self.file_ids)}] Downloading file ID: {file_id}...")
+            url = f'https://drive.google.com/uc?id={file_id}'
+            
+            # Output filename will be determined by gdown automatically
+            # or we can let it download to the dir
+            try:
+                # We change cwd temporarily to download into the target folder
+                # or use output parameter if we knew the name. 
+                # gdown handles names well.
+                
+                output_path = gdown.download(url, output=None, quiet=False, verify=False)
+                
+                if output_path:
+                    # Move to target dir if not already there
+                    # gdown downloads to CWD by default if output is None
+                    filename = os.path.basename(output_path)
+                    target_path = self.celeba_dir / filename
+                    
+                    if os.path.abspath(output_path) != str(target_path.absolute()):
+                        shutil.move(output_path, target_path)
+                        print(f"   Moved to {target_path}")
+                    
+                    success_count += 1
+                else:
+                    print("   ❌ Download failed (no output path)")
+                    
+            except Exception as e:
+                print(f"   ❌ Error downloading {file_id}: {e}")
+                
+        print(f"\n✅ Downloaded {success_count}/{len(self.file_ids)} files.")
+        return success_count > 0
 
     def unzip_files(self):
         """Unzip all zip files in the directory"""
         print(f"\n📦 Checking for zip files to extract in {self.celeba_dir}...")
         
-        zip_files = sorted(list(self.celeba_dir.glob('**/*.zip')))
+        zip_files = sorted(list(self.celeba_dir.glob('*.zip')))
         
         if not zip_files:
             print("   No zip files found.")
@@ -94,7 +137,7 @@ class DatasetDownloader:
         """Main execution flow"""
         install_gdown()
         
-        if self.download_celeba_spoof():
+        if self.download_files():
             self.unzip_files()
             print("\n" + "="*70)
             print("✅ DATASET PREPARATION COMPLETE")
