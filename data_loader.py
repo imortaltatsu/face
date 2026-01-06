@@ -59,6 +59,9 @@ class FaceImageDataGenerator:
         dataset_root = self.data_dir
         if (dataset_root / 'CelebA_Spoof').exists():
             dataset_root = dataset_root / 'CelebA_Spoof'
+        elif (dataset_root / 'celeba_spoof' / 'CelebA_Spoof').exists():
+            # Server layout keeps CelebA under a nested "celeba_spoof" folder
+            dataset_root = dataset_root / 'celeba_spoof' / 'CelebA_Spoof'
             
         print(f"Dataset root: {dataset_root}")
         
