@@ -22,38 +22,35 @@ from datetime import datetime
 
 # Import GPU configuration
 from gpu_config import setup_gpu_strategy
+from data_loader import FaceImageDataGenerator
 
 # Configuration
-SEQUENCE_LENGTH = 30  # 30 frames @ 10 FPS = 3 seconds
-IMAGE_SIZE = 224  # MobileNetV3 input size
-BATCH_SIZE = 16  # Per GPU
-EPOCHS = 50
+IMAGE_SIZE = 224  # EfficientNet input size
+BATCH_SIZE = 32  # Larger batch size for single images
+EPOCHS = 20
 LEARNING_RATE = 0.0001
 
 
-from data_loader import VideoDataGenerator
-
 class AntiSpoofingModel:
-    """Face Anti-Spoofing model using pure CNN architecture"""
+    """Face Anti-Spoofing model using pure CNN architecture (Single Frame)"""
     
-    def __init__(self, sequence_length=30, image_size=224):
-        self.sequence_length = sequence_length
+    def __init__(self, image_size=224):
         self.image_size = image_size
         self.model = None
         
     def build_model(self):
         """
-        Build EfficientNetB0 + Pooling model for anti-spoofing
+        Build EfficientNetB0 model for anti-spoofing (Image based)
         
         Architecture:
-        - EfficientNetB0 for spatial feature extraction (shared weights)
-        - GlobalAveragePooling1D for temporal aggregation (CNN approach)
+        - EfficientNetB0 for spatial feature extraction
+        - GlobalAveragePooling2D
         - Dense layers for classification
         
         Output: Binary classification (real=1, spoof=0)
         """
-        # Input: sequence of frames
-        inputs = keras.Input(shape=(self.sequence_length, self.image_size, self.image_size, 3))
+        # Input: Single image
+        inputs = keras.Input(shape=(self.image_size, self.image_size, 3))
         
         # EfficientNetB0 for feature extraction
         base_model = keras.applications.EfficientNetB0(
@@ -66,13 +63,8 @@ class AntiSpoofingModel:
         # Freeze base model initially
         base_model.trainable = False
         
-        # TimeDistributed wrapper to apply CNN to each frame
-        # Output shape: (Batch, Time, Features)
-        x = keras.layers.TimeDistributed(base_model)(inputs)
-        
-        # Temporal Aggregation: Global Average Pooling over time dimension
-        # This replaces LSTM with a pure CNN/Pooling approach
-        x = keras.layers.GlobalAveragePooling1D()(x)
+        # Feature extraction
+        x = base_model(inputs)
         
         # Classification head
         x = keras.layers.Dense(256, activation='relu')(x)
@@ -81,7 +73,7 @@ class AntiSpoofingModel:
         x = keras.layers.Dropout(0.3)(x)
         outputs = keras.layers.Dense(1, activation='sigmoid')(x)
         
-        model = keras.Model(inputs=inputs, outputs=outputs, name='anti_spoofing_cnn')
+        model = keras.Model(inputs=inputs, outputs=outputs, name='anti_spoofing_image_model')
         
         return model, base_model
     
@@ -98,10 +90,6 @@ class AntiSpoofingModel:
             ]
         )
         return model
-
-
-
-
 
 def export_to_tflite(model, output_path='models/anti_spoofing.tflite', quantize='int8'):
     """
@@ -126,7 +114,7 @@ def export_to_tflite(model, output_path='models/anti_spoofing.tflite', quantize=
         def representative_dataset():
             for _ in range(100):
                 # Generate random input (replace with real data in production)
-                data = np.random.rand(1, SEQUENCE_LENGTH, IMAGE_SIZE, IMAGE_SIZE, 3).astype(np.float32)
+                data = np.random.rand(1, IMAGE_SIZE, IMAGE_SIZE, 3).astype(np.float32)
                 yield [data]
         
         converter.representative_dataset = representative_dataset
@@ -158,7 +146,7 @@ def export_to_tflite(model, output_path='models/anti_spoofing.tflite', quantize=
 def main():
     """Main training function"""
     print("\n" + "="*70)
-    print("🛡️  FACE ANTI-SPOOFING MODEL TRAINING")
+    print("🛡️  FACE ANTI-SPOOFING IMAGE MODEL TRAINING")
     print("="*70 + "\n")
     
     # Setup GPU strategy
@@ -170,8 +158,6 @@ def main():
     if not data_dir.exists():
         print("❌ Dataset not found!")
         print(f"   Expected: {data_dir}")
-        print("\n💡 Run: python download_video_datasets.py")
-        print("   Or create synthetic dataset with webcam recordings")
         return
     
     # Create data generator
@@ -216,10 +202,9 @@ def main():
         
         # Train Generator
         print("\n📊 Loading Training Data...")
-        train_gen = VideoDataGenerator(
+        train_gen = FaceImageDataGenerator(
             data_dir=data_dir,
             json_path=train_json_path,
-            sequence_length=SEQUENCE_LENGTH,
             image_size=IMAGE_SIZE,
             batch_size=BATCH_SIZE
         )
@@ -227,38 +212,36 @@ def main():
         
         # Test/Val Generator
         print("\n📊 Loading Validation Data...")
-        val_gen = VideoDataGenerator(
+        val_gen = FaceImageDataGenerator(
             data_dir=data_dir,
             json_path=test_json_path,
-            sequence_length=SEQUENCE_LENGTH,
             image_size=IMAGE_SIZE,
             batch_size=BATCH_SIZE
         )
         val_dataset = val_gen.get_dataset(is_training=False)
         
         # Update counts for steps calculation
-        train_videos_count = len(train_gen.real_videos) + len(train_gen.spoof_videos)
-        val_videos_count = len(val_gen.real_videos) + len(val_gen.spoof_videos)
+        train_count = len(train_gen.real_images) + len(train_gen.spoof_images)
+        val_count = len(val_gen.real_images) + len(val_gen.spoof_images)
         
     else:
         print("⚠️  Separate Train/Test JSONs not found. Using random split or single JSON.")
         # Fallback to single generator
-        data_gen = VideoDataGenerator(
+        data_gen = FaceImageDataGenerator(
             data_dir=data_dir,
             json_path=train_json_path, # Might be None, will scan dir
-            sequence_length=SEQUENCE_LENGTH,
             image_size=IMAGE_SIZE,
             batch_size=BATCH_SIZE
         )
         train_dataset, val_dataset = data_gen.create_dataset(validation_split=0.2)
         
-        total_videos = len(data_gen.real_videos) + len(data_gen.spoof_videos)
-        train_videos_count = int(total_videos * 0.8)
-        val_videos_count = total_videos - train_videos_count
+        total_images = len(data_gen.real_images) + len(data_gen.spoof_images)
+        train_count = int(total_images * 0.8)
+        val_count = total_images - train_count
 
     # Calculate steps
-    steps_per_epoch = train_videos_count // BATCH_SIZE_TOTAL
-    validation_steps = val_videos_count // BATCH_SIZE_TOTAL
+    steps_per_epoch = train_count // BATCH_SIZE_TOTAL
+    validation_steps = val_count // BATCH_SIZE_TOTAL
     
     print(f"Steps per epoch: {steps_per_epoch}")
     print(f"Validation steps: {validation_steps}\n")
@@ -267,7 +250,6 @@ def main():
     with STRATEGY.scope():
         print("🏗️  Building model...")
         model_builder = AntiSpoofingModel(
-            sequence_length=SEQUENCE_LENGTH,
             image_size=IMAGE_SIZE
         )
         
@@ -288,31 +270,31 @@ def main():
         ),
         keras.callbacks.EarlyStopping(
             monitor='val_loss',
-            patience=10,
+            patience=5,
             restore_best_weights=True,
             verbose=1
         ),
         keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
             factor=0.5,
-            patience=5,
+            patience=3,
             min_lr=1e-7,
             verbose=1
         ),
         keras.callbacks.TensorBoard(
-            log_dir=f'logs/anti_spoofing_{datetime.now().strftime("%Y%m%d-%H%M%S")}',
+            log_dir=f'logs/anti_spoofing_img_{datetime.now().strftime("%Y%m%d-%H%M%S")}',
             histogram_freq=1
         )
     ]
     
     # Phase 1: Train with frozen base
     print("\n" + "="*70)
-    print("📚 Phase 1: Training CNN head (frozen EfficientNetB0)")
+    print("📚 Phase 1: Training Head (frozen EfficientNetB0)")
     print("="*70 + "\n")
     
     history1 = model.fit(
         train_dataset,
-        epochs=EPOCHS // 2,
+        epochs=5,
         steps_per_epoch=steps_per_epoch,
         validation_data=val_dataset,
         validation_steps=validation_steps,
@@ -337,7 +319,7 @@ def main():
     history2 = model.fit(
         train_dataset,
         epochs=EPOCHS,
-        initial_epoch=EPOCHS // 2,
+        initial_epoch=5,
         steps_per_epoch=steps_per_epoch,
         validation_data=val_dataset,
         validation_steps=validation_steps,
