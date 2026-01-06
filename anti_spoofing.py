@@ -127,7 +127,12 @@ class AntiSpoofingDetector:
             (is_real, confidence, reason)
         """
         if self.interpreter is None:
-            return False, 0.0, "Anti-spoofing model not loaded"
+            # Graceful fallback: run a simple traditional liveness check
+            logger.warning("Anti-spoofing model not loaded, using traditional liveness check.")
+            frames = self.preprocess_video(video_path)
+            if frames is None:
+                return False, 0.0, "Failed to process video frames (traditional liveness)"
+            return self._traditional_liveness_check(frames)
             
         frames = self.preprocess_video(video_path)
         if frames is None:
@@ -165,6 +170,65 @@ class AntiSpoofingDetector:
         except Exception as e:
             logger.error(f"Inference error: {e}")
             return False, 0.0, f"Inference error: {str(e)}"
+
+    def _traditional_liveness_check(self, frames: np.ndarray) -> Tuple[bool, float, str]:
+        """
+        Simple, traditional liveness check based on motion between frames.
+        
+        Args:
+            frames: numpy array with shape (1, seq_len, H, W, 3)
+        
+        Returns:
+            (is_real, score, reason)
+        """
+        try:
+            # Remove batch dim: (seq_len, H, W, 3)
+            seq = frames[0]
+            if seq.shape[0] < 2:
+                return False, 0.0, "Not enough frames for liveness analysis"
+
+            # Convert to grayscale float32 in [0, 1]
+            gray_seq = []
+            for f in seq:
+                if f.dtype != np.float32:
+                    g = f.astype(np.float32) / 255.0
+                else:
+                    g = f
+                # Simple RGB -> gray
+                g = 0.299 * g[:, :, 0] + 0.587 * g[:, :, 1] + 0.114 * g[:, :, 2]
+                gray_seq.append(g)
+            gray_seq = np.stack(gray_seq, axis=0)  # (seq_len, H, W)
+
+            # Frame-to-frame absolute differences
+            diffs = np.abs(gray_seq[1:] - gray_seq[:-1])  # (seq_len-1, H, W)
+            motion_level = float(np.mean(diffs))
+
+            # Map motion_level to a "score" between 0 and 1
+            # Empirical thresholds; can be tuned via config.
+            low = 0.01
+            high = 0.05
+            norm = (motion_level - low) / (high - low)
+            score = float(np.clip(norm, 0.0, 1.0))
+
+            # Threshold for liveness decision
+            motion_threshold = getattr(config, "TRADITIONAL_LIVENESS_THRESHOLD", 0.3)
+            is_real = score >= motion_threshold
+
+            logger.info(
+                f"Traditional liveness: motion_level={motion_level:.5f}, "
+                f"score={score:.3f}, threshold={motion_threshold:.3f}"
+            )
+
+            if is_real:
+                reason = "Sufficient motion detected (traditional liveness)"
+            else:
+                reason = "Insufficient motion; possible spoof (traditional liveness)"
+
+            return is_real, score, reason
+
+        except Exception as e:
+            logger.error(f"Traditional liveness error: {e}")
+            return False, 0.0, f"Traditional liveness error: {str(e)}"
 
 # Global instance
 _detector_instance = None
