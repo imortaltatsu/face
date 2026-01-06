@@ -223,6 +223,37 @@ def main():
         # Update counts for steps calculation
         train_count = len(train_gen.real_images) + len(train_gen.spoof_images)
         val_count = len(val_gen.real_images) + len(val_gen.spoof_images)
+        # Auto class weights (handle class imbalance)
+        pos_train = len(train_gen.real_images)
+        neg_train = len(train_gen.spoof_images)
+        if pos_train > 0 and neg_train > 0:
+            total_train = pos_train + neg_train
+            class_weights = {
+                0: total_train / (2.0 * neg_train),  # spoof -> label 0
+                1: total_train / (2.0 * pos_train),  # live  -> label 1
+            }
+            print(f"Class weights (train): {class_weights}")
+        else:
+            class_weights = None
+            print("⚠️ Could not compute class weights (missing class in train set).")
+        
+        print(f"Train class counts -> live: {train_gen.class_counts.get('live', len(train_gen.real_images))}, spoof: {train_gen.class_counts.get('spoof', len(train_gen.spoof_images))}")
+        print(f"Val class counts   -> live: {val_gen.class_counts.get('live', len(val_gen.real_images))}, spoof: {val_gen.class_counts.get('spoof', len(val_gen.spoof_images))}")
+        
+        # If validation split is missing a class, fall back to stratified split from train JSON
+        if val_gen.class_counts.get('live', len(val_gen.real_images)) == 0 or val_gen.class_counts.get('spoof', len(val_gen.spoof_images)) == 0:
+            print("⚠️  Validation split missing a class; creating stratified train/val from train JSON instead.")
+            data_gen = FaceImageDataGenerator(
+                data_dir=data_dir,
+                json_path=train_json_path,
+                image_size=IMAGE_SIZE,
+                batch_size=BATCH_SIZE
+            )
+            train_dataset, val_dataset = data_gen.create_dataset(validation_split=0.2)
+            train_count = int((len(data_gen.real_images) + len(data_gen.spoof_images)) * 0.8)
+            val_count = (len(data_gen.real_images) + len(data_gen.spoof_images)) - train_count
+            print(f"New train/val sizes -> train: {train_count}, val: {val_count}")
+            print(f"New class counts -> live: {data_gen.class_counts.get('live')}, spoof: {data_gen.class_counts.get('spoof')}")
         
     else:
         print("⚠️  Separate Train/Test JSONs not found. Using random split or single JSON.")
@@ -238,6 +269,18 @@ def main():
         total_images = len(data_gen.real_images) + len(data_gen.spoof_images)
         train_count = int(total_images * 0.8)
         val_count = total_images - train_count
+        pos_train = len(data_gen.real_images)
+        neg_train = len(data_gen.spoof_images)
+        if pos_train > 0 and neg_train > 0:
+            total_train = pos_train + neg_train
+            class_weights = {
+                0: total_train / (2.0 * neg_train),
+                1: total_train / (2.0 * pos_train),
+            }
+            print(f"Class weights (train): {class_weights}")
+        else:
+            class_weights = None
+            print("⚠️ Could not compute class weights (missing class in train set).")
 
     # Calculate steps
     steps_per_epoch = train_count // BATCH_SIZE_TOTAL
@@ -298,7 +341,8 @@ def main():
         steps_per_epoch=steps_per_epoch,
         validation_data=val_dataset,
         validation_steps=validation_steps,
-        callbacks=callbacks
+        callbacks=callbacks,
+        class_weight=class_weights
     )
     
     # Phase 2: Fine-tune entire model
@@ -323,7 +367,8 @@ def main():
         steps_per_epoch=steps_per_epoch,
         validation_data=val_dataset,
         validation_steps=validation_steps,
-        callbacks=callbacks
+        callbacks=callbacks,
+        class_weight=class_weights
     )
     
     # Save final model

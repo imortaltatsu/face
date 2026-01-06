@@ -52,6 +52,9 @@ class FaceImageDataGenerator:
         print(f"Loading dataset from JSON: {json_path}")
         with open(json_path, 'r') as f:
             data = json.load(f)
+        
+        # Track class counts for debugging splits
+        self.class_counts = {"live": 0, "spoof": 0}
             
         # Data format: {"Data/train/ID/type/img.jpg": [labels...], ...}
         
@@ -85,8 +88,10 @@ class FaceImageDataGenerator:
             # Store image path and label
             if label == 1:
                 self.real_images.append(str(full_path))
+                self.class_counts["live"] += 1
             else:
                 self.spoof_images.append(str(full_path))
+                self.class_counts["spoof"] += 1
                 
             count += 1
             if count % 100000 == 0:
@@ -94,6 +99,7 @@ class FaceImageDataGenerator:
                 
         print(f"\nFound {len(self.real_images)} real images")
         print(f"Found {len(self.spoof_images)} spoof images")
+        print(f"Class counts (live=1/spoof=0): {self.class_counts}")
     
     def _load_and_process_image(self, img_path, label):
         """
