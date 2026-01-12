@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Verification & Anti-Spoofing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab:hover {
+            background: #ebebeb;
+        }
+
+        .tab.active {
+            background: white;
+            border-bottom-color: #667eea;
+            color: #667eea;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .camera-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 20px 0;
+            aspect-ratio: 4/3;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .recording-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            animation: pulse 1s infinite;
+        }
+
+        .recording-indicator::before {
+            content: '';
+            display: block;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 5em;
+            color: white;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            display: none;
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 12px;
+            display: none;
+        }
+
+        .result.show {
+            display: block;
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+
+        .result.warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+        }
+
+        .result h3 {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .result-details {
+            margin-top: 15px;
+            font-size: 0.95em;
+        }
+
+        .result-details div {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .score-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .score-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .api-status {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online {
+            background: #28a745;
+            box-shadow: 0 0 10px #28a745;
+        }
+
+        .status-offline {
+            background: #dc3545;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ Face Anti-Spoofing System</h1>
+            <p>Secure verification with video-based liveness detection</p>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('register')">📝 Register</div>
+            <div class="tab" onclick="switchTab('verify')">✅ Verify</div>
+            <div class="tab" onclick="switchTab('users')">👥 Users</div>
+        </div>
+
+        <div class="content">
+            <div class="api-status">
+                <span class="status-indicator status-online" id="statusIndicator"></span>
+                <span id="statusText">Checking API...</span>
+            </div>
+
+            <!-- Register Tab -->
+            <div id="register" class="tab-content active">
+                <h2>Register New User</h2>
+                <div class="form-group">
+                    <label for="userId">User ID</label>
+                    <input type="text" id="userId" placeholder="e.g., user123">
+                </div>
+                <div class="form-group">
+                    <label for="userName">Full Name</label>
+                    <input type="text" id="userName" placeholder="e.g., John Doe">
+                </div>
+
+                <div class="camera-container">
+                    <video id="registerVideo" autoplay playsinline muted></video>
+                    <div class="recording-indicator" id="registerIndicator">REC</div>
+                    <div class="countdown" id="registerCountdown">3</div>
+                </div>
+
+                <div class="camera-controls">
+                    <button class="btn-secondary" onclick="startCamera('register')">📷 Start Camera</button>
+                    <button class="btn-primary" onclick="startRecording('register')" id="registerBtn" disabled>
+                        🎥 Record & Register (3s)
+                    </button>
+                </div>
+
+                <div class="loading" id="registerLoading">
+                    <div class="spinner"></div>
+                    <p>Analyzing video for liveness...</p>
+                </div>
+
+                <div class="result" id="registerResult"></div>
+            </div>
+
+            <!-- Verify Tab -->
+            <div id="verify" class="tab-content">
+                <h2>Verify Identity</h2>
+                <div class="form-group">
+                    <label for="verifyUserId">User ID to Verify</label>
+                    <input type="text" id="verifyUserId" placeholder="e.g., user123">
+                </div>
+
+                <div class="camera-container">
+                    <video id="verifyVideo" autoplay playsinline muted></video>
+                    <div class="recording-indicator" id="verifyIndicator">REC</div>
+                    <div class="countdown" id="verifyCountdown">3</div>
+                </div>
+
+                <div class="camera-controls">
+                    <button class="btn-secondary" onclick="startCamera('verify')">📷 Start Camera</button>
+                    <button class="btn-primary" onclick="startRecording('verify')" id="verifyBtn" disabled>
+                        🎥 Record & Verify (3s)
+                    </button>
+                </div>
+
+                <div class="loading" id="verifyLoading">
+                    <div class="spinner"></div>
+                    <p>Verifying liveness and identity...</p>
+                </div>
+
+                <div class="result" id="verifyResult"></div>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="users" class="tab-content">
+                <h2>Registered Users</h2>
+                <button class="btn-primary" onclick="loadUsers()" style="margin-bottom: 20px;">🔄 Refresh List</button>
+                <div id="userList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:9834';
+        let currentStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+
+        // Check API status
+        async function checkAPIStatus() {
+            try {
+                const response = await fetch(`${API_URL}/`);
+                const data = await response.json();
+                document.getElementById('statusIndicator').className = 'status-indicator status-online';
+                document.getElementById('statusText').textContent = `API Online - ${data.service}`;
+            } catch (error) {
+                document.getElementById('statusIndicator').className = 'status-indicator status-offline';
+                document.getElementById('statusText').textContent = 'API Offline - Please start server';
+            }
+        }
+
+        function switchTab(tabName) {
+            stopCamera();
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            if (tabName === 'users') loadUsers();
+        }
+
+        async function startCamera(type) {
+            try {
+                stopCamera();
+                const video = document.getElementById(`${type}Video`);
+                currentStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480, frameRate: 30 }
+                });
+                video.srcObject = currentStream;
+                document.getElementById(`${type}Btn`).disabled = false;
+            } catch (error) {
+                alert(`Camera Error: ${error.message}`);
+            }
+        }
+
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+        }
+
+        function startRecording(type) {
+            const btn = document.getElementById(`${type}Btn`);
+            const countdownEl = document.getElementById(`${type}Countdown`);
+            const indicator = document.getElementById(`${type}Indicator`);
+
+            btn.disabled = true;
+
+            // Countdown
+            let count = 3;
+            countdownEl.style.display = 'block';
+            countdownEl.textContent = count;
+
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.textContent = count;
+                } else {
+                    clearInterval(timer);
+                    countdownEl.style.display = 'none';
+                    recordVideo(type);
+                }
+            }, 1000);
+        }
+
+        function recordVideo(type) {
+            recordedChunks = [];
+            const indicator = document.getElementById(`${type}Indicator`);
+
+            try {
+                mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm' });
+            } catch (e) {
+                mediaRecorder = new MediaRecorder(currentStream); // Fallback
+            }
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) recordedChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                indicator.style.display = 'none';
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                if (type === 'register') submitRegister(blob);
+                else submitVerify(blob);
+            };
+
+            mediaRecorder.start();
+            indicator.style.display = 'flex';
+
+            // Stop after 3 seconds
+            setTimeout(() => {
+                mediaRecorder.stop();
+            }, 3000);
+        }
+
+        async function submitRegister(videoBlob) {
+            const userId = document.getElementById('userId').value.trim();
+            const userName = document.getElementById('userName').value.trim();
+
+            if (!userId || !userName) {
+                alert('Please enter User ID and Name');
+                return;
+            }
+
+            showLoading('register', true);
+
+            const formData = new FormData();
+            formData.append('user_id', userId);
+            formData.append('name', userName);
+            formData.append('video', videoBlob, 'video.webm');
+
+            try {
+                const response = await fetch(`${API_URL}/register_video`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    showResult('register', 'success', '✅ Registration Successful',
+                        `User registered with video liveness check!`);
+                } else {
+                    showResult('register', 'error', '❌ Registration Failed', data.detail);
+                }
+            } catch (error) {
+                showResult('register', 'error', '❌ Error', error.message);
+            } finally {
+                showLoading('register', false);
+                document.getElementById('registerBtn').disabled = false;
+            }
+        }
+
+        async function submitVerify(videoBlob) {
+            const userId = document.getElementById('verifyUserId').value.trim();
+
+            if (!userId) {
+                alert('Please enter User ID');
+                return;
+            }
+
+            showLoading('verify', true);
+
+            const formData = new FormData();
+            formData.append('user_id', userId);
+            formData.append('video', videoBlob, 'video.webm');
+
+            try {
+                const response = await fetch(`${API_URL}/verify_video`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    const resultType = data.is_match ? 'success' : 'warning';
+                    const details = `
+                        <div class="result-details">
+                            <div><strong>Match:</strong> ${data.is_match ? 'YES' : 'NO'}</div>
+                            <div><strong>Similarity:</strong> ${(data.similarity * 100).toFixed(1)}%</div>
+                            <div><strong>Liveness:</strong> ${data.liveness_passed ? '✅ Passed' : '❌ Failed'}</div>
+                            <div><strong>Anti-Spoof Score:</strong> ${(data.liveness_score * 100).toFixed(1)}%</div>
+                            <div><strong>Reason:</strong> ${data.liveness_reason}</div>
+                        </div>
+                    `;
+                    showResult('verify', resultType, data.message, details);
+                } else {
+                    showResult('verify', 'error', '❌ Verification Failed', data.detail);
+                }
+            } catch (error) {
+                showResult('verify', 'error', '❌ Error', error.message);
+            } finally {
+                showLoading('verify', false);
+                document.getElementById('verifyBtn').disabled = false;
+            }
+        }
+
+        function showLoading(type, show) {
+            document.getElementById(`${type}Loading`).className = show ? 'loading show' : 'loading';
+            document.getElementById(`${type}Result`).className = 'result';
+        }
+
+        function showResult(type, className, title, content) {
+            const el = document.getElementById(`${type}Result`);
+            el.className = `result ${className} show`;
+            el.innerHTML = `<h3>${title}</h3><div>${content}</div>`;
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_URL}/users`);
+                const data = await response.json();
+                const list = document.getElementById('userList');
+                list.innerHTML = data.users.map(u => `
+                    <div style="background:#f8f9fa; padding:10px; margin:5px 0; border-radius:5px;">
+                        <strong>${u.name}</strong> (${u.user_id})
+                    </div>
+                `).join('') || 'No users found.';
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        checkAPIStatus();
+        setInterval(checkAPIStatus, 10000);
+    </script>
+</body>
+
+</html>

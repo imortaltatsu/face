@@ -15,8 +15,12 @@ class FacePreprocessor:
     
     def __init__(self):
         """Initialize MTCNN face detector"""
+        print("⏳ Initializing MTCNN...")
         self.detector = MTCNN()
-        print("✓ MTCNN face detector initialized")
+        # Warmup
+        dummy = np.zeros((100, 100, 3), dtype=np.uint8)
+        self.detector.detect_faces(dummy)
+        print("✓ MTCNN face detector initialized and warmed up")
     
     def detect_face(self, image: np.ndarray) -> Optional[dict]:
         """
@@ -38,7 +42,7 @@ class FacePreprocessor:
         return largest
     
     def extract_face(self, image: np.ndarray, detection: dict = None, 
-                     margin: int = 20) -> Optional[np.ndarray]:
+                     margin: int = 20, target_size: Tuple[int, int] = None) -> Optional[np.ndarray]:
         """
         Extract and crop face from image
         
@@ -46,10 +50,14 @@ class FacePreprocessor:
             image: RGB image
             detection: Face detection (auto-detect if None)
             margin: Pixels around face box
+            target_size: Target (width, height) to resize to. Defaults to config.INPUT_SHAPE
             
         Returns:
-            Cropped face (160x160x3) or None
+            Cropped face (target_size) or None
         """
+        if target_size is None:
+            target_size = config.INPUT_SHAPE[:2]
+
         if detection is None:
             detection = self.detect_face(image)
             if detection is None:
@@ -65,7 +73,7 @@ class FacePreprocessor:
         
         # Crop and resize
         face = image[y1:y2, x1:x2]
-        face = cv2.resize(face, config.INPUT_SHAPE[:2])
+        face = cv2.resize(face, target_size)
         
         return face
     

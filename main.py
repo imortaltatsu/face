@@ -7,22 +7,28 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import numpy as np
+import cv2
 from PIL import Image
 
 # Import our modules
 from model import get_model
 from preprocessing import get_preprocessor
 from similarity import verify_faces, identify_face, cosine_similarity
-from anti_spoofing import get_detector
+from anti_spoofing import get_liveness_detector
 from user_profile import get_database
 import config
 import shutil
 import uuid
+import logging
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("face_api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,12 +39,11 @@ async def lifespan(app: FastAPI):
     # Shutdown: cleanup if needed
     pass
 
-
 # Initialize FastAPI app with lifespan
 app = FastAPI(
     title="Face Verification API",
-    description="Face verification system with video-based anti-spoofing and user profiles",
-    version="1.1.0",
+    description="Robust Face Verification & Liveness Detection System",
+    version="2.0.0",
     lifespan=lifespan
 )
 
@@ -46,7 +51,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -54,34 +59,28 @@ app.add_middleware(
 # Global instances (preloaded at startup)
 model = None
 preprocessor = None
-anti_spoofing = None
+liveness_detector = None
 database = None
 
 
 def initialize_models():
     """Initialize all models at startup"""
-    global model, preprocessor, anti_spoofing, database
+    global model, preprocessor, liveness_detector, database
     
-    print("\n🔄 Initializing models...")
-    print("  ⏳ Loading FaceNet model...")
+    logger.info("Initializing system components...")
+    
     model = get_model()
-    
-    print("  ⏳ Loading MTCNN face detector...")
     preprocessor = get_preprocessor()
-    
-    print("  ⏳ Loading anti-spoofing detector...")
-    anti_spoofing = get_detector()
-    
-    print("  ⏳ Loading DuckDB database...")
+    liveness_detector = get_liveness_detector()
     database = get_database()
     
-    print("✅ All models initialized and ready!\n")
-    return model, preprocessor, anti_spoofing, database
+    logger.info("✅ All systems go!")
+    return model, preprocessor, liveness_detector, database
 
 
 def get_instances():
     """Get initialized model instances"""
-    return model, preprocessor, anti_spoofing, database
+    return model, preprocessor, liveness_detector, database
 
 
 # Pydantic models for request/response
@@ -92,12 +91,16 @@ class VerifyRequest(BaseModel):
 class VerifyResponse(BaseModel):
     success: bool
     is_match: bool
+    user_id: str
+    name: str # Added name
     similarity: float
     confidence: float
     liveness_passed: bool
     liveness_score: float
     liveness_reason: str
     message: str
+
+
 
 
 class RegisterResponse(BaseModel):
@@ -192,7 +195,7 @@ async def register_user_video(
     Register a new user with a video (includes Anti-Spoofing check)
     """
     try:
-        m, prep, detector, db = get_instances()
+        m, prep, liveness, db = get_instances()
         
         # Save video temporarily
         temp_filename = f"temp_{uuid.uuid4()}.mp4"
@@ -203,37 +206,26 @@ async def register_user_video(
             
         try:
             # 1. Check Anti-Spoofing
-            print(f"🔍 Running anti-spoofing check on {temp_filename}...")
-            is_real, score, reason = detector.analyze_video(temp_path)
+            logger.info(f"🔍 Running liveness check on {temp_filename}...")
+            # Pass preprocessor to the analyze_video method
+            is_real, score, reason, best_frame = liveness.analyze_video(temp_path, prep)
             
-            print(f"📊 Anti-spoofing result: Real={is_real}, Score={score:.4f}, Reason={reason}")
+            logger.info(f"📊 Result: Real={is_real}, Score={score:.4f}, Reason={reason}")
             
             if not is_real:
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"Anti-spoofing check failed: {reason} (Score: {score:.2f})"
+                    detail=f"Liveness check failed: {reason}"
                 )
             
-            # 2. Extract face from video for registration
-            # We need to get a good frame. The detector already extracted frames.
-            # For simplicity, we'll extract the first valid frame again or use the video processing.
-            # Let's use OpenCV to get the middle frame
-            cap = cv2.VideoCapture(temp_path)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
-            ret, frame = cap.read()
-            cap.release()
-            
-            if not ret:
+            # 2. Use extracted face frame for registration
+            if best_frame is None:
                 raise HTTPException(status_code=400, detail="Could not extract frame from video")
                 
-            # Convert BGR to RGB
-            img_array = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
             # Process face
-            result = prep.process_image(img_array)
+            result = prep.process_image(best_frame)
             if result is None:
-                raise HTTPException(status_code=400, detail="No face detected in video")
+                raise HTTPException(status_code=400, detail="No face detected in registration frame")
             
             face, detection = result
             
@@ -243,22 +235,25 @@ async def register_user_video(
             # Create profile
             profile = db.create_profile(user_id, name, embedding)
             
-            return RegisterResponse(
+            resp = RegisterResponse(
                 success=True,
                 user_id=user_id,
                 name=name,
-                message=f"User {name} registered with video (Anti-spoofing score: {score:.2f})"
+                message=f"User {name} registered (Liveness Score: {score:.2f})"
+            )
+            return JSONResponse(
+                content=jsonable_encoder(resp),
+                headers={"Access-Control-Allow-Origin": "*"}
             )
             
         finally:
-            # Cleanup temp file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
     
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Exception in register_video: {str(e)}")
+        logger.error(f"register_video error: {e}")
         raise HTTPException(status_code=500, detail=f"Video registration failed: {str(e)}")
 
 
@@ -276,7 +271,18 @@ async def verify_user(
         # Get user profile
         profile = db.get_profile(user_id)
         if profile is None:
-            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+            return VerifyResponse(
+                success=False,
+                is_match=False,
+                user_id=user_id,
+                name="Unknown",
+                similarity=0.0,
+                confidence=0.0,
+                liveness_passed=False, 
+                liveness_score=0.0,
+                liveness_reason="N/A",
+                message=f"User ID '{user_id}' is not registered."
+            )
         
         # Read and process image
         image_bytes = await image.read()
@@ -323,12 +329,23 @@ async def verify_user_video(
     Verify user with video (includes Anti-Spoofing)
     """
     try:
-        m, prep, detector, db = get_instances()
+        m, prep, liveness, db = get_instances()
         
         # Get user profile
         profile = db.get_profile(user_id)
         if profile is None:
-            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+             return VerifyResponse(
+                success=False,
+                is_match=False,
+                user_id=user_id,
+                name="Unknown",
+                similarity=0.0,
+                confidence=0.0,
+                liveness_passed=False, 
+                liveness_score=0.0,
+                liveness_reason="N/A",
+                message=f"User ID '{user_id}' is not registered."
+            )
             
         # Save video temporarily
         temp_filename = f"temp_verify_{uuid.uuid4()}.mp4"
@@ -339,39 +356,34 @@ async def verify_user_video(
             
         try:
             # 1. Check Anti-Spoofing
-            print(f"🔍 Running anti-spoofing check on {temp_filename}...")
-            is_real, score, reason = detector.analyze_video(temp_path)
+            logger.info(f"🔍 Running liveness check on {temp_filename}...")
+            # analyze_video now returns best_frame
+            is_real, score, reason, best_frame = liveness.analyze_video(temp_path, prep)
             
-            print(f"📊 Anti-spoofing result: Real={is_real}, Score={score:.4f}, Reason={reason}")
+            logger.info(f"📊 Result: Real={is_real}, Score={score:.4f}, Reason={reason}")
             
             if not is_real:
                 return VerifyResponse(
                     success=False,
                     is_match=False,
+                    user_id=user_id,
+                    name=profile.name,
                     similarity=0.0,
                     confidence=0.0,
                     liveness_passed=False,
                     liveness_score=score,
                     liveness_reason=reason,
-                    message=f"Anti-spoofing failed: {reason}"
+                    message=f"Liveness Check Failed: {reason}"
                 )
             
-            # 2. Extract face for verification
-            cap = cv2.VideoCapture(temp_path)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
-            ret, frame = cap.read()
-            cap.release()
-            
-            if not ret:
-                raise HTTPException(status_code=400, detail="Could not extract frame from video")
-                
-            img_array = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
+            # 2. Use the best frame found during liveness check for verification
+            if best_frame is None:
+                 raise HTTPException(status_code=400, detail="Could not extract valid frame from video despite passing liveness")
+
             # Process face
-            result = prep.process_image(img_array)
+            result = prep.process_image(best_frame)
             if result is None:
-                raise HTTPException(status_code=400, detail="No face detected in video")
+                raise HTTPException(status_code=400, detail="No face detected in video (verification step)")
             
             face, detection = result
             
@@ -382,15 +394,21 @@ async def verify_user_video(
             user_embedding = profile.get_embedding()
             is_match, similarity = verify_faces(embedding, user_embedding)
             
-            return VerifyResponse(
+            resp = VerifyResponse(
                 success=True,
                 is_match=is_match,
+                user_id=user_id,
+                name=profile.name,
                 similarity=similarity,
                 confidence=(similarity + score) / 2,
                 liveness_passed=True,
                 liveness_score=score,
                 liveness_reason=reason,
                 message=f"Verification {'successful' if is_match else 'failed'}"
+            )
+            return JSONResponse(
+                content=jsonable_encoder(resp),
+                headers={"Access-Control-Allow-Origin": "*"}
             )
             
         finally:
@@ -400,7 +418,7 @@ async def verify_user_video(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Exception in verify_video: {str(e)}")
+        logger.error(f"verify_video error: {e}")
         raise HTTPException(status_code=500, detail=f"Video verification failed: {str(e)}")
 
 
@@ -470,6 +488,119 @@ async def identify_user(image: UploadFile = File(...)):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Identification failed: {str(e)}")
+
+
+@app.post("/identify_video", response_model=IdentifyResponse)
+async def identify_user_video(video: UploadFile = File(...)):
+    """
+    Identify user from video (1:N matching) with Liveness Check
+    """
+    try:
+        m, prep, liveness, db = get_instances()
+        
+        # Save video temporarily
+        temp_filename = f"temp_identify_{uuid.uuid4()}.mp4"
+        temp_path = os.path.join(config.UPLOAD_DIR, temp_filename)
+        
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+            
+        try:
+            # 1. Check Anti-Spoofing
+            logger.info(f"🔍 Running liveness check on {temp_filename}...")
+            # analyze_video now returns best_frame
+            is_real, score, reason, best_frame = liveness.analyze_video(temp_path, prep)
+            
+            logger.info(f"📊 Result: Real={is_real}, Score={score:.4f}, Reason={reason}")
+            
+            if not is_real:
+                return IdentifyResponse(
+                    success=False,
+                    identified=False,
+                    user_id=None,
+                    name=None,
+                    similarity=0.0,
+                    liveness_passed=False,
+                    liveness_score=score,
+                    message=f"Liveness Check Failed: {reason}"
+                )
+            
+            # 2. Use the best frame for identification
+            if best_frame is None:
+                 raise HTTPException(status_code=400, detail="Could not extract valid frame from video despite passing liveness")
+
+            # Process face
+            result = prep.process_image(best_frame)
+            if result is None:
+                raise HTTPException(status_code=400, detail="No face detected in video (identification step)")
+            
+            face, detection = result
+            
+            # Extract embedding
+            embedding = m.get_embedding(face)
+            
+            # Identify from database
+            all_embeddings = db.get_all_embeddings()
+            
+            if not all_embeddings:
+                return IdentifyResponse(
+                    success=True,
+                    identified=False,
+                    user_id=None,
+                    name=None,
+                    similarity=0.0,
+                    liveness_passed=True,
+                    liveness_score=score,
+                    message="No users registered in database"
+                )
+            
+            user_id, similarity = identify_face(embedding, all_embeddings)
+            
+            if user_id:
+                profile = db.get_profile(user_id)
+                resp = IdentifyResponse(
+                    success=True,
+                    identified=True,
+                    user_id=user_id,
+                    name=profile.name,
+                    similarity=similarity,
+                    liveness_passed=True,
+                    liveness_score=score,
+                    message=f"Identified as {profile.name}"
+                )
+            else:
+                resp = IdentifyResponse(
+                    success=True,
+                    identified=False,
+                    user_id=None,
+                    name=None,
+                    similarity=0.0,
+                    liveness_passed=True,
+                    liveness_score=score,
+                    message="No match found"
+                )
+            
+            # Explicitly return JSONResponse to ensure headers are attached even if middleware flakes
+            return JSONResponse(
+                content=jsonable_encoder(resp),
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "*",
+                    "Access-Control-Allow-Headers": "*"
+                }
+            )
+            
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            # Ensure upload is closed
+            await video.close()
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"identify_video error: {e}")
+        raise HTTPException(status_code=500, detail=f"Video identification failed: {str(e)}")
 
 
 @app.post("/add-face/{user_id}")

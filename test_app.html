@@ -4,87 +4,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Face Verification & Anti-Spoofing</title>
+    <title>Face ID System - Full API Demo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #10b981;
+            --secondary-dark: #059669;
+            --error: #ef4444;
+            --background: #0f172a;
+            --surface: #1e293b;
+            --surface-hover: #334155;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --bg-glass: rgba(30, 41, 59, 0.95);
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
         }
 
         .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 900px;
-            width: 100%;
-            overflow: hidden;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
         }
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
+        h1,
+        h2,
+        h3 {
+            margin: 0 0 1rem 0;
+        }
+
+        h1 {
             text-align: center;
+            font-size: 2.5rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 2rem;
         }
 
-        .header h1 {
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            opacity: 0.9;
-            font-size: 1.1em;
-        }
-
-        .tabs {
+        /* Tabs Navigation */
+        .nav-tabs {
             display: flex;
-            background: #f5f5f5;
-            border-bottom: 2px solid #e0e0e0;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.5rem;
+            border-radius: 0.75rem;
+            overflow-x: auto;
         }
 
-        .tab {
+        .nav-btn {
             flex: 1;
-            padding: 20px;
-            text-align: center;
-            cursor: pointer;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
             font-weight: 600;
-            transition: all 0.3s;
-            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            white-space: nowrap;
         }
 
-        .tab:hover {
-            background: #ebebeb;
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
         }
 
-        .tab.active {
-            background: white;
-            border-bottom-color: #667eea;
-            color: #667eea;
+        .nav-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
-        .content {
-            padding: 40px;
-        }
-
-        .tab-content {
+        /* Content Sections */
+        .section {
             display: none;
+            /* Hidden by default */
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.3s ease-out;
         }
 
-        .tab-content.active {
+        .section.active {
             display: block;
-            animation: fadeIn 0.3s;
         }
 
         @keyframes fadeIn {
@@ -99,69 +114,138 @@
             }
         }
 
-        .form-group {
-            margin-bottom: 25px;
+        /* Forms & Inputs */
+        .input-group {
+            margin-bottom: 1.5rem;
         }
 
         label {
             display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
         }
 
-        input[type="text"] {
+        input[type="text"],
+        input[type="file"] {
             width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 1em;
-            transition: border-color 0.3s;
+            padding: 0.75rem;
+            background: var(--background);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            color: var(--text);
+            box-sizing: border-box;
+            transition: border-color 0.2s;
         }
 
         input[type="text"]:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--primary);
         }
 
-        .camera-container {
+        button.action-btn {
+            width: 100%;
+            padding: 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 1rem;
+        }
+
+        button.action-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        button.action-btn:disabled {
+            background: var(--border);
+            cursor: allowed;
+            opacity: 0.7;
+        }
+
+        button.secondary-btn {
+            background: var(--surface-hover);
+            color: var(--text);
+            padding: 0.5rem 1rem;
+            border-radius: 0.4rem;
+            border: 1px solid var(--border);
+            cursor: pointer;
+        }
+
+        button.secondary-btn:hover {
+            background: var(--border);
+        }
+
+        /* Toggle Switches */
+        .toggle-container {
+            display: flex;
+            background: var(--background);
+            padding: 0.25rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            width: fit-content;
+        }
+
+        .toggle-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 0.25rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .toggle-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Camera */
+        .camera-box {
             position: relative;
-            background: #000;
-            border-radius: 12px;
+            background: black;
+            border-radius: 0.5rem;
             overflow: hidden;
-            margin: 20px 0;
+            width: 100%;
+            max-width: 500px;
             aspect-ratio: 4/3;
+            margin: 0 auto 1.5rem;
         }
 
         video {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: block;
+            transform: scaleX(-1);
         }
 
-        .recording-indicator {
+        .rec-indicator {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 0, 0, 0.8);
+            top: 10px;
+            right: 10px;
+            background: rgba(220, 38, 38, 0.8);
             color: white;
-            padding: 8px 15px;
+            padding: 4px 10px;
             border-radius: 20px;
-            font-weight: bold;
+            font-size: 0.8rem;
             display: none;
             align-items: center;
-            gap: 8px;
-            animation: pulse 1s infinite;
+            gap: 5px;
         }
 
-        .recording-indicator::before {
-            content: '';
-            display: block;
-            width: 10px;
-            height: 10px;
+        .rec-dot {
+            width: 8px;
+            height: 8px;
             background: white;
             border-radius: 50%;
+            animation: pulse 1s infinite;
         }
 
         @keyframes pulse {
@@ -178,332 +262,362 @@
             }
         }
 
-        .countdown {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 5em;
-            color: white;
-            font-weight: bold;
-            text-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        /* Status Box */
+        .status-box {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
             display: none;
+            /* Start hidden */
+            text-align: center;
+            line-height: 1.5;
         }
 
-        .camera-controls {
+        .status-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid #059669;
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid #dc2626;
+        }
+
+        .status-info {
+            background: rgba(37, 99, 235, 0.15);
+            color: #60a5fa;
+            border: 1px solid #2563eb;
+        }
+
+        /* User List Cards */
+        .user-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .user-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            padding: 1rem;
+            border-radius: 0.75rem;
             display: flex;
-            gap: 15px;
-            margin-top: 20px;
-            justify-content: center;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        button {
-            padding: 12px 30px;
+        .user-info h4 {
+            margin: 0;
+            color: var(--text);
+        }
+
+        .user-info p {
+            margin: 0.25rem 0 0;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .btn-icon {
+            background: none;
             border: none;
-            border-radius: 8px;
-            font-size: 1em;
-            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            transition: background 0.2s;
+            color: var(--text-muted);
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        .btn-icon:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text);
         }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        .text-red {
+            color: var(--error);
         }
 
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
+        .text-red:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
         }
 
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c82333;
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-            box-shadow: none !important;
-        }
-
-        .result {
-            margin-top: 30px;
-            padding: 20px;
-            border-radius: 12px;
-            display: none;
-        }
-
-        .result.show {
-            display: block;
-            animation: slideIn 0.3s;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        .result.success {
-            background: #d4edda;
-            border: 2px solid #28a745;
-            color: #155724;
-        }
-
-        .result.error {
-            background: #f8d7da;
-            border: 2px solid #dc3545;
-            color: #721c24;
-        }
-
-        .result.warning {
-            background: #fff3cd;
-            border: 2px solid #ffc107;
-            color: #856404;
-        }
-
-        .result h3 {
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .result-details {
-            margin-top: 15px;
-            font-size: 0.95em;
-        }
-
-        .result-details div {
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .score-bar {
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 5px;
-        }
-
-        .score-fill {
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.5s;
-        }
-
-        .loading {
+            background: rgba(0, 0, 0, 0.8);
             display: none;
-            text-align: center;
-            padding: 20px;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
         }
 
-        .loading.show {
-            display: block;
+        .modal {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 1rem;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
         }
 
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
         }
 
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
+        pre {
+            background: black;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            color: #4ade80;
+            font-size: 0.85rem;
         }
 
-        .api-status {
-            text-align: center;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin-bottom: 20px;
+        /* Comparison utility */
+        .compare-container {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
         }
 
-        .status-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
+        .compare-box {
+            flex: 1;
+            min-width: 250px;
         }
 
-        .status-online {
-            background: #28a745;
-            box-shadow: 0 0 10px #28a745;
-        }
-
-        .status-offline {
-            background: #dc3545;
+        .img-preview {
+            width: 100%;
+            height: 200px;
+            background: #000;
+            margin-top: 0.5rem;
+            border-radius: 0.5rem;
+            object-fit: contain;
+            display: none;
         }
     </style>
 </head>
 
 <body>
+
     <div class="container">
-        <div class="header">
-            <h1>🛡️ Face Anti-Spoofing System</h1>
-            <p>Secure verification with video-based liveness detection</p>
+        <h1>Face ID System <span style="font-size: 0.4em; color: var(--text-muted); vertical-align: middle;">v2.0</span>
+        </h1>
+
+        <!-- Navigation -->
+        <div class="nav-tabs">
+            <button class="nav-btn active" onclick="showSection('users')">User Management</button>
+            <button class="nav-btn" onclick="showSection('register')">Registration</button>
+            <button class="nav-btn" onclick="showSection('verify')">Verify / Identify</button>
+            <button class="nav-btn" onclick="showSection('compare')">Compare Faces</button>
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 5px;">
+                <span style="font-size: 0.8rem; color: var(--text-muted);">API:</span>
+                <input type="text" id="apiUrlInput"
+                    style="padding: 0.4rem; font-size: 0.8rem; width: 200px; color: #aaa;"
+                    value="http://localhost:9834">
+            </div>
         </div>
 
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('register')">📝 Register</div>
-            <div class="tab" onclick="switchTab('verify')">✅ Verify</div>
-            <div class="tab" onclick="switchTab('users')">👥 Users</div>
-        </div>
-
-        <div class="content">
-            <div class="api-status">
-                <span class="status-indicator status-online" id="statusIndicator"></span>
-                <span id="statusText">Checking API...</span>
-            </div>
-
-            <!-- Register Tab -->
-            <div id="register" class="tab-content active">
-                <h2>Register New User</h2>
-                <div class="form-group">
-                    <label for="userId">User ID</label>
-                    <input type="text" id="userId" placeholder="e.g., user123">
-                </div>
-                <div class="form-group">
-                    <label for="userName">Full Name</label>
-                    <input type="text" id="userName" placeholder="e.g., John Doe">
-                </div>
-
-                <div class="camera-container">
-                    <video id="registerVideo" autoplay playsinline muted></video>
-                    <div class="recording-indicator" id="registerIndicator">REC</div>
-                    <div class="countdown" id="registerCountdown">3</div>
-                </div>
-
-                <div class="camera-controls">
-                    <button class="btn-secondary" onclick="startCamera('register')">📷 Start Camera</button>
-                    <button class="btn-primary" onclick="startRecording('register')" id="registerBtn" disabled>
-                        🎥 Record & Register (3s)
-                    </button>
-                </div>
-
-                <div class="loading" id="registerLoading">
-                    <div class="spinner"></div>
-                    <p>Analyzing video for liveness...</p>
-                </div>
-
-                <div class="result" id="registerResult"></div>
-            </div>
-
-            <!-- Verify Tab -->
-            <div id="verify" class="tab-content">
-                <h2>Verify Identity</h2>
-                <div class="form-group">
-                    <label for="verifyUserId">User ID to Verify</label>
-                    <input type="text" id="verifyUserId" placeholder="e.g., user123">
-                </div>
-
-                <div class="camera-container">
-                    <video id="verifyVideo" autoplay playsinline muted></video>
-                    <div class="recording-indicator" id="verifyIndicator">REC</div>
-                    <div class="countdown" id="verifyCountdown">3</div>
-                </div>
-
-                <div class="camera-controls">
-                    <button class="btn-secondary" onclick="startCamera('verify')">📷 Start Camera</button>
-                    <button class="btn-primary" onclick="startRecording('verify')" id="verifyBtn" disabled>
-                        🎥 Record & Verify (3s)
-                    </button>
-                </div>
-
-                <div class="loading" id="verifyLoading">
-                    <div class="spinner"></div>
-                    <p>Verifying liveness and identity...</p>
-                </div>
-
-                <div class="result" id="verifyResult"></div>
-            </div>
-
-            <!-- Users Tab -->
-            <div id="users" class="tab-content">
+        <!-- 1. USER MANAGEMENT -->
+        <div id="users" class="section active">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2>Registered Users</h2>
-                <button class="btn-primary" onclick="loadUsers()" style="margin-bottom: 20px;">🔄 Refresh List</button>
-                <div id="userList"></div>
+                <button class="secondary-btn" onclick="loadUsers()">Refresh List</button>
             </div>
+            <div id="userGrid" class="user-grid">
+                <!-- Populated via JS -->
+                <div style="color: var(--text-muted);">Loading users...</div>
+            </div>
+        </div>
+
+        <!-- 2. REGISTRATION -->
+        <div id="register" class="section">
+            <h2>New User Registration</h2>
+
+            <div class="input-group">
+                <label>User ID (Unique)</label>
+                <input type="text" id="regUserId" placeholder="e.g., jane_doe">
+            </div>
+            <div class="input-group">
+                <label>Full Name</label>
+                <input type="text" id="regName" placeholder="e.g., Jane Doe">
+            </div>
+
+            <!-- Video Mode Only -->
+            <div id="regVideoMode">
+                <label>Live Camera (Move your head slightly)</label>
+                <div class="camera-box">
+                    <video id="regVideo" autoplay muted playsinline></video>
+                    <div class="rec-indicator" id="regRecInd">
+                        <div class="rec-dot"></div>Recording...
+                    </div>
+                </div>
+                <button type="button" class="action-btn" id="btnRegVideo">Start Recording & Register (2s)</button>
+            </div>
+
+            <div id="regStatus" class="status-box"></div>
+        </div>
+
+        <!-- 3. VERIFY / IDENTIFY -->
+        <div id="verify" class="section">
+            <h2>Verify & Identify</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                <b>Verify (1:1):</b> Enter User ID. Checks if you are THAT user.<br>
+                <b>Identify (1:N):</b> Leave User ID empty. Finds who you are in the database.
+            </p>
+
+            <div class="input-group">
+                <label>User ID (Optional)</label>
+                <input type="text" id="verUserId" placeholder="Leave empty to Identify">
+            </div>
+
+            <!-- Video Mode Only -->
+            <div id="verVideoMode">
+                <div class="camera-box">
+                    <video id="verVideo" autoplay muted playsinline></video>
+                    <div class="rec-indicator" id="verRecInd">
+                        <div class="rec-dot"></div>Recording...
+                    </div>
+                </div>
+                <button type="button" class="action-btn" id="btnVerVideo">Start Verification (2s)</button>
+            </div>
+
+            <div id="verStatus" class="status-box"></div>
+        </div>
+
+        <!-- 4. COMPARE -->
+        <div id="compare" class="section">
+            <h2>Face Comparison (1:1)</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Upload two images to compare if they belong to
+                the same person.</p>
+
+            <div class="compare-container">
+                <div class="compare-box">
+                    <label>Image 1</label>
+                    <input type="file" id="cmpFile1" accept="image/*" onchange="previewImage(this, 'prev1')">
+                    <img id="prev1" class="img-preview">
+                </div>
+                <div class="compare-box">
+                    <label>Image 2</label>
+                    <input type="file" id="cmpFile2" accept="image/*" onchange="previewImage(this, 'prev2')">
+                    <img id="prev2" class="img-preview">
+                </div>
+            </div>
+
+            <button type="button" class="action-btn" id="btnCompare">Compare Faces</button>
+            <div id="cmpStatus" class="status-box"></div>
+        </div>
+
+    </div>
+
+    <!-- USER DETAILS MODAL -->
+    <div id="userModal" class="modal-overlay" onclick="if(event.target === this) closeModal()">
+        <div class="modal">
+            <button class="close-modal" onclick="closeModal()">&times;</button>
+            <h2 id="modalTitle">User Details</h2>
+            <div id="modalContent"></div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 1.5rem 0;">
+
+            <h3>Add Extra Face</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Improve recognition by adding more
+                angles/conditions.</p>
+            <input type="file" id="addFaceFile" accept="image/*" style="margin-bottom: 0.5rem;">
+            <button type="button" class="action-btn" style="background: var(--secondary);"
+                onclick="addFaceToProfile()">Add Face to Profile</button>
+            <div id="modalStatus" class="status-box"></div>
         </div>
     </div>
 
     <script>
-        const API_URL = 'http://localhost:9834';
-        let currentStream = null;
-        let mediaRecorder = null;
-        let recordedChunks = [];
+        // --- CONFIG ---
+        // Auto-detect based on current location, or fallback to localhost
+        const DEFAULT_API_BASE = window.location.origin.replace('3000', '9834').replace('5500', '9834').replace('8080', '9834');
 
-        // Check API status
-        async function checkAPIStatus() {
-            try {
-                const response = await fetch(`${API_URL}/`);
-                const data = await response.json();
-                document.getElementById('statusIndicator').className = 'status-indicator status-online';
-                document.getElementById('statusText').textContent = `API Online - ${data.service}`;
-            } catch (error) {
-                document.getElementById('statusIndicator').className = 'status-indicator status-offline';
-                document.getElementById('statusText').textContent = 'API Offline - Please start server';
+        function getApiBase() {
+            const input = document.getElementById('apiUrlInput');
+            return input ? input.value.replace(/\/$/, '') : DEFAULT_API_BASE;
+        }
+
+        // --- STATE ---
+        let currentStream = null;
+        let currentVideoElem = null;
+        let selectedUserId = null;
+
+        // --- INIT ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set initial value for the API input
+            const input = document.getElementById('apiUrlInput');
+            if (input) input.value = DEFAULT_API_BASE;
+
+            // Refresh list after setting URL
+            loadUsers();
+            setupEventListeners();
+            // Start camera for initial tab if needed, relying on showSection logic
+            showSection('users');
+        });
+
+        function setupEventListeners() {
+            document.getElementById('btnRegVideo').addEventListener('click', (e) => { e.preventDefault(); handleRecording('reg'); });
+            document.getElementById('btnVerVideo').addEventListener('click', (e) => { e.preventDefault(); handleRecording('ver'); });
+            document.getElementById('btnCompare').addEventListener('click', (e) => { e.preventDefault(); handleCompare(e); });
+
+            // Handle Enter Key for inputs
+            const inputs = ['regUserId', 'regName', 'verUserId'];
+            inputs.forEach(id => {
+                document.getElementById(id).addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (id.startsWith('reg')) handleRecording('reg');
+                        else handleRecording('ver');
+                    }
+                });
+            });
+        }
+
+        // --- NAVIGATION ---
+        async function showSection(sectionId) {
+            // UI Updates
+            document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+            document.getElementById(sectionId).classList.add('active');
+
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            document.querySelector(`button[onclick="showSection('${sectionId}')"]`).classList.add('active');
+
+            // Camera Management
+            stopCamera();
+            if (sectionId === 'register') {
+                await startCamera('regVideo');
+            } else if (sectionId === 'verify') {
+                await startCamera('verVideo');
             }
         }
 
-        function switchTab(tabName) {
-            stopCamera();
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            event.target.classList.add('active');
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            if (tabName === 'users') loadUsers();
-        }
-
-        async function startCamera(type) {
+        // --- CAMERA UTILS ---
+        async function startCamera(videoElemId) {
             try {
-                stopCamera();
-                const video = document.getElementById(`${type}Video`);
-                currentStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480, frameRate: 30 }
-                });
-                video.srcObject = currentStream;
-                document.getElementById(`${type}Btn`).disabled = false;
-            } catch (error) {
-                alert(`Camera Error: ${error.message}`);
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640 } });
+                currentStream = stream;
+                currentVideoElem = document.getElementById(videoElemId);
+                currentVideoElem.srcObject = stream;
+            } catch (err) {
+                console.error("Camera Error:", err);
+                alert("Could not access camera. Please allow permissions.");
             }
         }
 
@@ -512,171 +626,393 @@
                 currentStream.getTracks().forEach(track => track.stop());
                 currentStream = null;
             }
+            if (currentVideoElem) {
+                currentVideoElem.srcObject = null;
+            }
         }
 
-        function startRecording(type) {
-            const btn = document.getElementById(`${type}Btn`);
-            const countdownEl = document.getElementById(`${type}Countdown`);
-            const indicator = document.getElementById(`${type}Indicator`);
+        async function recordVideo(durationMs) {
+            if (!currentStream || !currentStream.active) {
+                console.error("No active camera stream");
+                return null;
+            }
 
+            return new Promise((resolve, reject) => {
+                try {
+                    const mediaRecorder = new MediaRecorder(currentStream);
+                    const chunks = [];
+
+                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+                    mediaRecorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        console.log(`Recording finished. Blob size: ${blob.size}`);
+                        resolve(blob);
+                    };
+                    mediaRecorder.onerror = (e) => {
+                        console.error("MediaRecorder Error:", e);
+                        reject(e);
+                    };
+
+                    mediaRecorder.start();
+                    console.log("Recording started...");
+                    setTimeout(() => {
+                        if (mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                        }
+                    }, durationMs);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }
+
+        // --- API HANDLERS ---
+
+        // 1. REGISTRATION
+        async function handleRecording(type) {
+            const isReg = type === 'reg';
+            const statusEl = document.getElementById(isReg ? 'regStatus' : 'verStatus');
+            const indEl = document.getElementById(isReg ? 'regRecInd' : 'verRecInd');
+            const btn = document.getElementById(isReg ? 'btnRegVideo' : 'btnVerVideo');
+
+            // Validation
+            const userId = isReg ? document.getElementById('regUserId').value.trim() : document.getElementById('verUserId').value.trim();
+            const name = isReg ? document.getElementById('regName').value.trim() : null;
+
+            if (isReg && (!userId || !name)) return updateStatus(statusEl, "Please enter User ID and Name", "error");
+
+            // UI State
             btn.disabled = true;
-
-            // Countdown
-            let count = 3;
-            countdownEl.style.display = 'block';
-            countdownEl.textContent = count;
-
-            const timer = setInterval(() => {
-                count--;
-                if (count > 0) {
-                    countdownEl.textContent = count;
-                } else {
-                    clearInterval(timer);
-                    countdownEl.style.display = 'none';
-                    recordVideo(type);
-                }
-            }, 1000);
-        }
-
-        function recordVideo(type) {
-            recordedChunks = [];
-            const indicator = document.getElementById(`${type}Indicator`);
+            const originalText = btn.innerText;
+            btn.innerText = "Recording...";
+            indEl.style.display = 'flex';
+            updateStatus(statusEl, "Recording face video...", "info");
 
             try {
-                mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm' });
+                // Check Camera availability again
+                if (!currentStream) {
+                    throw new Error("Camera not active. Please refresh or allow camera access.");
+                }
+
+                // Record
+                const blob = await recordVideo(2000); // 2 seconds
+
+                if (!blob || blob.size === 0) {
+                    throw new Error("Recording failed (empty video).");
+                }
+
+                btn.innerText = "Processing...";
+                indEl.style.display = 'none';
+
+                // Send
+                const fd = new FormData();
+                if (userId) fd.append('user_id', userId);
+
+                if (isReg) {
+                    fd.append('name', name);
+                    fd.append('video', blob, 'reg.mp4');
+
+                    console.log("Sending registration request...");
+                    const res = await postData('/register_video', fd);
+                    if (res.success) {
+                        updateStatus(statusEl, `✅ ${res.message}`, "success");
+                        document.getElementById('regUserId').value = '';
+                        document.getElementById('regName').value = '';
+                    } else {
+                        updateStatus(statusEl, `❌ Registration Failed: ${res.detail || 'Unknown error'}`, "error");
+                    }
+                } else {
+                    // Verify or Identify Video
+                    fd.append('video', blob, 'ver.mp4');
+                    const endpoint = userId ? '/verify_video' : '/identify_video';
+
+                    console.log(`Sending request to ${endpoint}...`);
+                    const res = await postData(endpoint, fd);
+                    processVerifyResponse(res, statusEl, userId);
+                }
+
+            } catch (err) {
+                console.error(err);
+                updateStatus(statusEl, `❌ Error: ${err.message}`, "error");
+                indEl.style.display = 'none';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        }
+
+        async function handleRegImage() {
+            const userId = document.getElementById('regUserId').value.trim();
+            const name = document.getElementById('regName').value.trim();
+            const fileInput = document.getElementById('regFile');
+            const statusEl = document.getElementById('regStatus');
+
+            if (!userId || !name || !fileInput.files[0]) return updateStatus(statusEl, "Please fill all fields and select image", "error");
+
+            const fd = new FormData();
+            fd.append('user_id', userId);
+            fd.append('name', name);
+            fd.append('image', fileInput.files[0]);
+
+            updateStatus(statusEl, "Uploading...", "info");
+            try {
+                const res = await postData('/register', fd);
+                if (res.success) {
+                    updateStatus(statusEl, `✅ ${res.message}`, "success");
+                    fileInput.value = '';
+                } else {
+                    updateStatus(statusEl, `❌ ${res.detail}`, "error");
+                }
             } catch (e) {
-                mediaRecorder = new MediaRecorder(currentStream); // Fallback
+                updateStatus(statusEl, `❌ Error: ${e.message}`, "error");
             }
-
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) recordedChunks.push(event.data);
-            };
-
-            mediaRecorder.onstop = () => {
-                indicator.style.display = 'none';
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                if (type === 'register') submitRegister(blob);
-                else submitVerify(blob);
-            };
-
-            mediaRecorder.start();
-            indicator.style.display = 'flex';
-
-            // Stop after 3 seconds
-            setTimeout(() => {
-                mediaRecorder.stop();
-            }, 3000);
         }
 
-        async function submitRegister(videoBlob) {
-            const userId = document.getElementById('userId').value.trim();
-            const userName = document.getElementById('userName').value.trim();
+        async function handleVerImage() {
+            const userId = document.getElementById('verUserId').value.trim();
+            const fileInput = document.getElementById('verFile');
+            const statusEl = document.getElementById('verStatus');
 
-            if (!userId || !userName) {
-                alert('Please enter User ID and Name');
-                return;
-            }
+            if (!fileInput.files[0]) return updateStatus(statusEl, "Please select an image", "error");
 
-            showLoading('register', true);
+            const fd = new FormData();
+            fd.append('image', fileInput.files[0]);
+            if (userId) fd.append('user_id', userId);
 
-            const formData = new FormData();
-            formData.append('user_id', userId);
-            formData.append('name', userName);
-            formData.append('video', videoBlob, 'video.webm');
+            const endpoint = userId ? '/verify' : '/identify';
+            updateStatus(statusEl, "Processing...", "info");
 
             try {
-                const response = await fetch(`${API_URL}/register_video`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
+                const res = await postData(endpoint, fd);
+                processVerifyResponse(res, statusEl, userId);
+            } catch (e) {
+                updateStatus(statusEl, `❌ Error: ${e.message}`, "error");
+            }
+        }
 
-                if (response.ok) {
-                    showResult('register', 'success', '✅ Registration Successful',
-                        `User registered with video liveness check!`);
-                } else {
-                    showResult('register', 'error', '❌ Registration Failed', data.detail);
+        function processVerifyResponse(data, statusEl, requestedUserId) {
+            // Unified handler for Verify/Identify responses (Image or Video)
+
+            // 1. Check for API-level logic failures (User not found, Liveness failed, etc.)
+            if (data.success === false) {
+                // If specific liveness info is available, append it
+                let extra = "";
+                if (data.liveness_passed === false && data.liveness_score !== undefined) {
+                    extra = ` (Score: ${data.liveness_score.toFixed(4)})`;
                 }
-            } catch (error) {
-                showResult('register', 'error', '❌ Error', error.message);
-            } finally {
-                showLoading('register', false);
-                document.getElementById('registerBtn').disabled = false;
-            }
-        }
-
-        async function submitVerify(videoBlob) {
-            const userId = document.getElementById('verifyUserId').value.trim();
-
-            if (!userId) {
-                alert('Please enter User ID');
-                return;
+                return updateStatus(statusEl, `❌ ${data.message}${extra}`, "error");
             }
 
-            showLoading('verify', true);
-
-            const formData = new FormData();
-            formData.append('user_id', userId);
-            formData.append('video', videoBlob, 'video.webm');
-
-            try {
-                const response = await fetch(`${API_URL}/verify_video`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-
-                if (response.ok) {
-                    const resultType = data.is_match ? 'success' : 'warning';
-                    const details = `
-                        <div class="result-details">
-                            <div><strong>Match:</strong> ${data.is_match ? 'YES' : 'NO'}</div>
-                            <div><strong>Similarity:</strong> ${(data.similarity * 100).toFixed(1)}%</div>
-                            <div><strong>Liveness:</strong> ${data.liveness_passed ? '✅ Passed' : '❌ Failed'}</div>
-                            <div><strong>Anti-Spoof Score:</strong> ${(data.liveness_score * 100).toFixed(1)}%</div>
-                            <div><strong>Reason:</strong> ${data.liveness_reason}</div>
-                        </div>
-                    `;
-                    showResult('verify', resultType, data.message, details);
+            // 2. Verification / Identification Success Logic
+            if (requestedUserId) {
+                // Check if the faces actually matched
+                if (data.is_match) {
+                    updateStatus(statusEl, `✅ <b>Verified:</b> ${data.name || requestedUserId}<br>Similarity: ${(data.similarity * 100).toFixed(1)}%`, "success");
                 } else {
-                    showResult('verify', 'error', '❌ Verification Failed', data.detail);
+                    updateStatus(statusEl, `❌ <b>Verification Failed</b><br>Faces do not match (Similarity: ${(data.similarity * 100).toFixed(1)}%)`, "error");
                 }
-            } catch (error) {
-                showResult('verify', 'error', '❌ Error', error.message);
-            } finally {
-                showLoading('verify', false);
-                document.getElementById('verifyBtn').disabled = false;
+            } else {
+                // Identity Logic
+                if (data.identified) {
+                    updateStatus(statusEl, `✅ <b>Identified:</b> ${data.name} (${data.user_id})<br>Similarity: ${(data.similarity * 100).toFixed(1)}%`, "success");
+                } else {
+                    updateStatus(statusEl, `❌ <b>Unknown User</b><br>No match found in database`, "error");
+                }
             }
         }
 
-        function showLoading(type, show) {
-            document.getElementById(`${type}Loading`).className = show ? 'loading show' : 'loading';
-            document.getElementById(`${type}Result`).className = 'result';
-        }
 
-        function showResult(type, className, title, content) {
-            const el = document.getElementById(`${type}Result`);
-            el.className = `result ${className} show`;
-            el.innerHTML = `<h3>${title}</h3><div>${content}</div>`;
-        }
-
+        // 2. USER MANAGEMENT
         async function loadUsers() {
+            const grid = document.getElementById('userGrid');
+            grid.innerHTML = '<div style="color:var(--text-muted)">Loading...</div>';
+            const api = getApiBase();
             try {
-                const response = await fetch(`${API_URL}/users`);
-                const data = await response.json();
-                const list = document.getElementById('userList');
-                list.innerHTML = data.users.map(u => `
-                    <div style="background:#f8f9fa; padding:10px; margin:5px 0; border-radius:5px;">
-                        <strong>${u.name}</strong> (${u.user_id})
+                const res = await fetch(`${api}/users`);
+                const data = await res.json();
+
+                if (data.users.length === 0) {
+                    grid.innerHTML = '<div style="color:var(--text-muted)">No users found.</div>';
+                    return;
+                }
+
+                grid.innerHTML = data.users.map(u => `
+                <div class="user-card">
+                    <div class="user-info">
+                        <h4>${u.name}</h4>
+                        <p>ID: ${u.user_id}</p>
                     </div>
-                `).join('') || 'No users found.';
+                    <div>
+                        <button class="btn-icon" onclick="openUserModal('${u.user_id}')" title="Details">📋</button>
+                        <button class="btn-icon text-red" onclick="deleteUser('${u.user_id}')" title="Delete">🗑</button>
+                    </div>
+                </div>
+            `).join('');
+
             } catch (e) {
-                console.error(e);
+                grid.innerHTML = `<div style="color:var(--error)">Error loading users: ${e.message}</div>`;
             }
         }
 
-        checkAPIStatus();
-        setInterval(checkAPIStatus, 10000);
+        async function deleteUser(id) {
+            if (!confirm(`Delete user ${id}? This cannot be undone.`)) return;
+            try {
+                const api = getApiBase();
+                await fetch(`${api}/users/${id}`, { method: 'DELETE' });
+                loadUsers(); // refresh
+            } catch (e) {
+                alert("Failed to delete: " + e.message);
+            }
+        }
+
+        // Modal
+        async function openUserModal(userId) {
+            selectedUserId = userId;
+            const modal = document.getElementById('userModal');
+            const content = document.getElementById('modalContent');
+            const status = document.getElementById('modalStatus');
+
+            modal.style.display = 'flex';
+            content.innerHTML = 'Loading details...';
+            status.style.display = 'none';
+
+            try {
+                const api = getApiBase();
+                const res = await fetch(`${api}/users/${userId}`);
+                const data = await res.json();
+
+                content.innerHTML = `
+                <div style="margin-bottom:1rem;">
+                    <strong>ID:</strong> ${data.user_id}<br>
+                    <strong>Name:</strong> ${data.name}<br>
+                    <strong>Embeddings stored:</strong> ${data.num_embeddings}<br>
+                    <strong>Enriched Model:</strong> ${data.has_enriched_embedding ? 'Yes' : 'No'}
+                </div>
+                <!-- <pre>${JSON.stringify(data, null, 2)}</pre> -->
+            `;
+            } catch (e) {
+                content.innerHTML = `<span style="color:var(--error)">Error: ${e.message}</span>`;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('userModal').style.display = 'none';
+            selectedUserId = null;
+        }
+
+        async function addFaceToProfile() {
+            if (!selectedUserId) return;
+            const fileIn = document.getElementById('addFaceFile');
+            const status = document.getElementById('modalStatus');
+
+            if (!fileIn.files[0]) return updateStatus(status, "Please select an image", "error");
+
+            const fd = new FormData();
+            fd.append('image', fileIn.files[0]);
+
+            updateStatus(status, "Uploading...", "info");
+            try {
+                const res = await postData(`/add-face/${selectedUserId}`, fd);
+                if (res.success) {
+                    updateStatus(status, `✅ Face added!`, "success");
+                    fileIn.value = '';
+                    // Reload details to show updated count?
+                    openUserModal(selectedUserId);
+                } else {
+                    updateStatus(status, `❌ ${res.detail}`, "error");
+                }
+            } catch (e) {
+                updateStatus(status, `❌ ${e.message}`, "error");
+            }
+        }
+
+
+        // 3. COMPARE
+        function previewImage(input, imgId) {
+            const preview = document.getElementById(imgId);
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        async function handleCompare() {
+            const f1 = document.getElementById('cmpFile1').files[0];
+            const f2 = document.getElementById('cmpFile2').files[0];
+            const status = document.getElementById('cmpStatus');
+
+            if (!f1 || !f2) return updateStatus(status, "Please select both images", "error");
+
+            const fd = new FormData();
+            fd.append('image1', f1);
+            fd.append('image2', f2);
+
+            updateStatus(status, "Comparing...", "info");
+            try {
+                const res = await postData('/compare', fd);
+                if (res.success) {
+                    const sim = (res.similarity * 100).toFixed(2);
+                    const verdict = res.is_match ? "MATCH" : "NO MATCH";
+                    const color = res.is_match ? "success" : "error";
+                    updateStatus(status, `<b>${verdict}</b> (Similarity: ${sim}%)`, color);
+                } else {
+                    updateStatus(status, `Error: ${res.detail}`, "error");
+                }
+            } catch (e) {
+                updateStatus(status, `Error: ${e.message}`, "error");
+            }
+        }
+
+
+        // --- HELPERS ---
+        async function postData(endpoint, formData) {
+            const api = getApiBase();
+
+            // Log for debugging
+            console.log(`POSTing to ${api}${endpoint}`);
+
+            try {
+                const res = await fetch(`${api}${endpoint}`, {
+                    method: 'POST',
+                    body: formData,
+                    mode: 'cors', // Explicitly request CORS
+                    cache: 'no-cache', // Prevent caching issues
+                    credentials: 'omit', // Don't send cookies
+                    headers: {
+                        'Accept': 'application/json' // Explicitly ask for JSON
+                    }
+                });
+
+                if (!res.ok) {
+                    // Try to read error text if JSON fails
+                    const text = await res.text();
+                    try {
+                        const errJson = JSON.parse(text);
+                        return { success: false, detail: errJson.detail || res.statusText, message: errJson.message || res.statusText };
+                    } catch (e) {
+                        return { success: false, detail: `Server error (${res.status}): ${text}`, message: `Server error (${res.status})` };
+                    }
+                }
+
+                return await res.json();
+            } catch (err) {
+                console.error("Fetch failed:", err);
+                // Throwing specific error for UI to catch
+                throw new Error(`Connection Failed: ${err.message}. Check API URL.`);
+            }
+        }
+
+        function updateStatus(el, msg, type) {
+            el.style.display = 'block';
+            el.innerHTML = msg;
+            el.className = 'status-box'; // reset
+            el.classList.add(`status-${type}`);
+        }
+
     </script>
 </body>
 

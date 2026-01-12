@@ -243,8 +243,18 @@ class ProfileDatabase:
         self._add_embedding_to_db(user_id, embedding)
     
     def delete_profile(self, user_id: str):
-        """Delete user profile (cascades to embeddings)"""
-        self.conn.execute("DELETE FROM users WHERE user_id = ?", [user_id])
+        """Delete user profile and all associated embeddings"""
+        try:
+            # Delete dependent records first
+            self.conn.execute("DELETE FROM embeddings WHERE user_id = ?", [user_id])
+            self.conn.execute("DELETE FROM enriched_embeddings WHERE user_id = ?", [user_id])
+            
+            # Delete user
+            self.conn.execute("DELETE FROM users WHERE user_id = ?", [user_id])
+            
+        except Exception as e:
+            print(f"Error deleting profile {user_id}: {e}")
+            raise e
     
     def list_profiles(self) -> List[dict]:
         """List all profiles (without embeddings)"""

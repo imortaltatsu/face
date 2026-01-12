@@ -28,7 +28,6 @@ USE_ENRICHED_EMBEDDINGS = True
 
 # Anti-spoofing settings (Video-based)
 ANTI_SPOOFING_ENABLED = True
-ANTI_SPOOFING_MODEL = 'models/anti_spoofing_int8.tflite'
 SEQUENCE_LENGTH = 30
 VIDEO_FPS = 10
 MAX_VIDEO_SIZE_MB = 50
